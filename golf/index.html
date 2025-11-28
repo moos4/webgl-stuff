@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebGL Golf</title>
+  <style>
+    canvas { border: 1px solid black; display: block; }
+    #controls {
+      margin-top: 10px;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="glcanvas" width=600 height=600></canvas>
+  <div id="controls">
+    Velocity:
+    <input type="range" id="velocitySlider" min="-0.01" max="0.01" step="0.0005" value="0">
+    <span id="velocityValue">0</span>
+    
+    <input type="checkbox" id="cameraZoom" value="false">
+    <span>zoom</span>
+    <input type="range" id="zoomSlider" min="0.01" max="2" step="0.01" value="0.1">
+    <span id="zoomValue">0.1</span>
+  </div>
+
+  <script>
+    const vsSource = `
+  attribute vec2 aPosition;
+  uniform vec2 uCameraOffset;
+  uniform float uZoom;
+  varying float vY;
+  uniform float sizex;
+
+  void main() {
+    vec2 position = (aPosition * vec2(sizex, 1) + uCameraOffset) * uZoom  ;
+    vY = aPosition.y;
+    gl_Position = vec4(position.x, position.y, 0.0, 1.0);
+  }
+`;
+
+const fsSource = `
+  precision mediump float;
+  uniform vec4 uColor;
+  varying float vY;
+
+  void main() {
+  
+    if (uColor.a == 0.0011) {
+      // Map vY (elevation) to a 0.0–1.0 range for gradient
+    float t = clamp((vY + 1.0) / 2.0, 0.0, 1.0);
+    
+
+    // Define gradient: mix between dark and light green
+    vec3 lowColor = vec3(0.0, 0.6, 0.0);
+    vec3 highColor = vec3(0.6, 1.0, 0.6);
+    vec3 baseColor = mix(lowColor, highColor, t);
+
+    // Add subtle procedural noise
+    float noise = sin(vY * 50.0) * cos(vY * 40.0);
+    float brightness = 0.9 + 0.1 * noise;
+
+    gl_FragColor = vec4(baseColor * brightness, 1.0);
+    return;
+    }
+    
+    
+    
+    gl_FragColor = vec4(uColor.rgba);
+    return;
+
+    
+  }
+`;
+
+
+
+
+    function initShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.enable(gl.BLEND);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        alert('Shader error: ' + gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    function initProgram(gl, vsSource, fsSource) {
+      const vertexShader = initShader(gl, gl.VERTEX_SHADER, vsSource);
+      const fragmentShader = initShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        alert('Program error: ' + gl.getProgramInfoLog(program));
+        return null;
+      }
+      return program;
+    }
+
+    function createCircleVertices(centerX, centerY, radius, segments) {
+      const vertices = [centerX, centerY];
+      for (let i = 0; i <= segments; i++) {
+        const angle = i * 2 * Math.PI / segments;
+        vertices.push(centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle));
+      }
+      return new Float32Array(vertices);
+    }
+
+    function createTerrainVertices(centerY, width, numPoints, heightVariation, hillCount) {
+  const vertices = [];
+  const step = width / (numPoints - 1);
+
+  const controlPoints = [];
+  const controlCount = hillCount + 3;
+
+  // Create random control points
+  for (let i = 0; i < controlCount; i++) {
+    const x = -width / 2 + (i / (controlCount - 1)) * width;
+    const y = centerY + (Math.random() - 0.5) * heightVariation * 2;
+    controlPoints.push({ x, y });
+  }
+
+  function interpolate(p0, p1, p2, p3, t) {
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return 0.5 * (
+      (2 * p1) +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    );
+  }
+
+  for (let i = 0; i < numPoints; i++) {
+    const x = -width / 2 + i * step;
+    const tGlobal = (x + width / 2) / width;
+    const section = Math.floor(tGlobal * (controlPoints.length - 3));
+    const localT = (tGlobal * (controlPoints.length - 3)) - section;
+
+    const p0 = controlPoints[Math.max(0, section)];
+    const p1 = controlPoints[section + 1];
+    const p2 = controlPoints[section + 2];
+    const p3 = controlPoints[Math.min(controlPoints.length - 1, section + 3)];
+
+    const y = interpolate(p0.y, p1.y, p2.y, p3.y, localT);
+
+    vertices.push(x, y);
+  }
+
+  return new Float32Array(vertices);
+}
+
+
+
+    function calculateNormal(x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      return { x: -dy / length, y: dx / length };
+    }
+
+    function reflectVelocity(velocity, normal) {
+      const dot = velocity.x * normal.x + velocity.y * normal.y;
+      return {
+        x: velocity.x - 2 * dot * normal.x,
+        y: velocity.y - 2 * dot * normal.y
+      };
+    }
+
+
+function generateSandPatchesWithClusters(terrainVertices, clusterCount, patchesPerCluster, radius, segments) {
+  const patches = [];
+
+  // Turn terrain into point array
+  const terrainPoints = [];
+  for (let i = 0; i < terrainVertices.length; i += 2) {
+    terrainPoints.push({ x: terrainVertices[i], y: terrainVertices[i + 1] });
+  }
+
+  // Interpolate terrain Y at given x
+  function getTerrainY(x) {
+    for (let i = 0; i < terrainPoints.length - 1; i++) {
+      const p1 = terrainPoints[i];
+      const p2 = terrainPoints[i + 1];
+      if (x >= p1.x && x <= p2.x) {
+        const t = (x - p1.x) / (p2.x - p1.x);
+        return p1.y + t * (p2.y - p1.y);
+      }
+    }
+    return 0;
+  }
+
+  // Generate cluster centers
+  const clusterCenters = [];
+  for (let i = 0; i < clusterCount; i++) {
+    const idx = Math.floor(Math.random() * (terrainPoints.length - 2));
+    clusterCenters.push({
+      x: terrainPoints[idx].x,
+      y: terrainPoints[idx].y
+    });
+  }
+
+  // Create patches around each cluster center
+  for (const cluster of clusterCenters) {
+    for (let i = 0; i < patchesPerCluster; i++) {
+      // Scatter slightly around the center
+      const angle = Math.random() * 2 * Math.PI;
+      const distance = Math.random() * 0.2;
+      const cx = cluster.x + Math.cos(angle) * distance;
+      const cy = getTerrainY(cx);
+
+      const circleVerts = [cx, cy];
+      for (let j = 0; j <= segments; j++) {
+        const a = j * 2 * Math.PI / segments;
+        const dx = Math.cos(a) * radius;
+        const px = cx + dx;
+        const py = getTerrainY(px); // snap to terrain
+        const dy = Math.sin(a) * radius;
+        const finalY = Math.min(py, cy + dy);
+        circleVerts.push(px, finalY);
+      }
+
+      patches.push(new Float32Array(circleVerts));
+    }
+  }
+
+  return patches;
+}
+
+
+
+function isBallOnSandPatch(ballX, ballY, sandPatches) {
+  for (const patch of sandPatches) {
+    const cx = patch[0];
+    const cy = patch[1];
+    const dx = ballX - cx;
+    const dy = ballY - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.25) { // 0.25 is the radius of sand patches
+      return true;
+    }
+  }
+  return false;
+}
+
+
+
+    function main() {
+      const canvas = document.getElementById('glcanvas');
+      const gl = canvas.getContext('webgl');
+      if (!gl) {
+        alert('WebGL not supported');
+        return;
+      }
+      
+      
+      const program = initProgram(gl, vsSource, fsSource);
+      gl.useProgram(program);
+
+      const positionLoc = gl.getAttribLocation(program, 'aPosition');
+      const colorLoc = gl.getUniformLocation(program, 'uColor');
+      const cameraOffsetLoc = gl.getUniformLocation(program, 'uCameraOffset');
+      const zoomLoc = gl.getUniformLocation(program, 'uZoom');
+
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.enableVertexAttribArray(positionLoc);
+      gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+      
+      //canvas settings
+      const stretchie = gl.getUniformLocation(program, 'sizex');
+      let stretch = 1
+      gl.uniform1f(stretchie, stretch);
+      
+      // canvaswidth = 600 * (stretch / 0.25)
+      
+      
+      
+      //ball settings
+      let ballX = 0;
+      let ballY = 0.5;
+      let ballVelocityX = 0;
+      let ballVelocityY = 0;
+      const gravity = -0.001;
+      const bounceFactor = 0.6; //0.6
+      const ballRadius = 0.05;
+
+      let cameraOffset = [0, 0];
+      
+      //terrain settings
+      const terrainHeight = 0; // this just moves terrain up and down
+      const terrainWidth = 100.0; // how wide it should be
+      const terrainPoints = 6000; // how smooth, for best result terrainWidth x 60
+      const terrainHeightVariation = 0.3; // how steep the hills are, for best result 0.3
+      const hillCount = 100; // how many big hills, for best result == terrainWidth
+      const terrainDepth = -100 // how deep the filled terrain generates
+      
+      //shoot settings
+      const power =   0.1;
+
+
+      const terrainVertices = createTerrainVertices(
+        terrainHeight,
+        terrainWidth,
+        terrainPoints,
+        terrainHeightVariation,
+        hillCount,
+        );
+      
+      // After terrain is generated
+      const holeIndex = Math.floor(Math.random() * (terrainVertices.length / 2 - 1));
+      const holeX = terrainVertices[holeIndex * 2];
+      const holeY = terrainVertices[holeIndex * 2 + 1];
+      const holeRadius = 0.03;
+
+        
+     
+const sandPatches = generateSandPatchesWithClusters(
+  terrainVertices,
+  10,    // number of clusters
+  6,    // patches per cluster
+  0.25  , // radius of each patch
+  30    // segments per circle
+);
+
+      
+      // Slider input logic
+      let addingVelocity = false;
+      let currentSliderValue = 0;
+      const velocitySlider = document.getElementById('velocitySlider');
+      const velocityValue = document.getElementById('velocityValue');
+
+      velocitySlider.addEventListener('input', () => {
+        currentSliderValue = parseFloat(velocitySlider.value);
+        velocityValue.textContent = velocitySlider.value;
+      });
+
+      velocitySlider.addEventListener('mousedown', () => addingVelocity = true);
+      velocitySlider.addEventListener('touchstart', () => addingVelocity = true);
+      window.addEventListener('mouseup', () => addingVelocity = false);
+      window.addEventListener('touchend', () => addingVelocity = false);
+      
+      // Camera zoom out
+      const zoomOutBox = document.getElementById('cameraZoom');
+      let currentZoomSliderValue = 0.1;
+      const zoomSlider = document.getElementById('zoomSlider');
+      const zoomValue = document.getElementById('zoomValue');
+      
+      zoomSlider.addEventListener('input', () => {
+        currentZoomSliderValue = parseFloat(zoomSlider.value);
+        zoomValue.textContent = zoomSlider.value;
+      });
+
+
+      // Drag to aim
+      let isDragging = false;
+      let dragEnd = null;
+
+      canvas.addEventListener('mousedown', e => {
+        isDragging = true;
+        dragEnd = getMouseClipCoords(e, canvas);
+      });
+
+      canvas.addEventListener('mousemove', e => {
+        if (isDragging) {
+          dragEnd = getMouseClipCoords(e, canvas);
+        }
+      });
+
+      window.addEventListener('mouseup', e => {
+  const isStationary = Math.abs(ballVelocityX) < 0.001 && Math.abs(ballVelocityY) < 0.001;
+
+  if (isDragging && dragEnd && isStationary || isBallOnSandPatch(ballX, ballY, sandPatches)) {
+    const dx = dragEnd.x - ballX;
+    const dy = dragEnd.y - ballY;
+
+    // Only allow shooting if ball is on terrain (or close to it)
+    for (let i = 0; i < terrainVertices.length - 2; i += 2) {
+      const x1 = terrainVertices[i];
+      const y1 = terrainVertices[i + 1];
+      const x2 = terrainVertices[i + 2];
+      const y2 = terrainVertices[i + 3];
+
+      if (ballX > x1 && ballX < x2) {
+        const t = (ballX - x1) / (x2 - x1);
+        const groundY = y1 + t * (y2 - y1);
+        const touchingGround = Math.abs(ballY - (groundY + ballRadius)) < 0.005;
+
+        if (touchingGround || isBallOnSandPatch(ballX, ballY, sandPatches)) {
+          ballVelocityX += dx * power;
+          ballVelocityY += dy * power;
+        }
+
+        break;
+      }
+    }
+  }
+
+  isDragging = false;
+  dragEnd = null;
+});
+
+
+      function getMouseClipCoords(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / canvas.width) * 2 - 1;
+        const y = -((e.clientY - rect.top) / canvas.height) * 2 + 1;
+        return {
+          x: x - cameraOffset[0]  * stretch,
+          y: y - cameraOffset[1]
+        };
+      }
+
+      function draw() {
+        gl.clearColor(0.6, 0.8, 1.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        if (addingVelocity) {
+          ballVelocityX += currentSliderValue;
+        }
+        
+        if (inhole == true) {
+          gl.drawArrays(
+            gl.POINTS, // mode
+            0,         // starting point
+            1          // number of points to draw
+          );
+        }
+        
+        
+
+        ballVelocityY += gravity;
+        ballVelocityX *= 0.999;
+        ballVelocityY *= 0.999;
+
+        ballX += ballVelocityX;
+        ballY += ballVelocityY;
+        
+        
+
+
+        let zoom = 1; // Smaller = zoom out, default is 1
+        
+        if (zoomOutBox.checked) {
+          zoom = currentZoomSliderValue
+        }
+        
+        gl.uniform1f(zoomLoc, zoom);
+
+        cameraOffset[0] = -ballX * stretch;
+        cameraOffset[1] = -ballY;
+        
+        
+        
+        gl.uniform2f(cameraOffsetLoc, cameraOffset[0], cameraOffset[1]);
+
+        
+        
+        // Fill terrain area
+const filledTerrain = [];
+for (let i = 0; i < terrainVertices.length; i += 2) {
+  const x = terrainVertices[i];
+  const y = terrainVertices[i + 1];
+  filledTerrain.push(x, y);      // Terrain point
+  filledTerrain.push(x, terrainDepth);   // Bottom of screen
+}
+
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(filledTerrain), gl.STATIC_DRAW);
+gl.uniform4f(colorLoc, 0.0, 0.8, 0.0, 0.0011); // terrain base
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, filledTerrain.length / 2);
+
+// Fake thick ridge line using triangle strip
+const ridgeThickness = 0.02; // Adjust thickness here
+const ridgeVertices = [];
+
+for (let i = 0; i < terrainVertices.length; i += 2) {
+  const x = terrainVertices[i];
+  const y = terrainVertices[i + 1];
+  ridgeVertices.push(x, y + ridgeThickness / 2); // Top edge
+  ridgeVertices.push(x, y - ridgeThickness / 2); // Bottom edge
+}
+
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ridgeVertices), gl.STATIC_DRAW);
+gl.uniform4f(colorLoc, 0.0, 0.75, 0.0, 1); // Light green ridge
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, ridgeVertices.length / 2);
+
+// Draw sand patches
+for (const patch of sandPatches) {
+  gl.bufferData(gl.ARRAY_BUFFER, patch, gl.STATIC_DRAW);
+  gl.uniform4f(colorLoc, 1.0, 0.9, 0.5, 1.0); // yellowish sand color
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, patch.length / 2);
+}
+
+
+// Draw hole
+
+const holeCircle = createCircleVertices(holeX, holeY + 0.001, holeRadius, 40);
+gl.bufferData(gl.ARRAY_BUFFER, holeCircle, gl.STATIC_DRAW);
+gl.uniform4f(colorLoc, 0.0, 0.0, 0.0, 1.0); // black
+gl.drawArrays(gl.TRIANGLE_FAN, 0, holeCircle.length / 2);
+
+
+
+// Draw flag pole
+const flagHeight = 0.2;
+const flagVertices = new Float32Array([
+  holeX, holeY + holeRadius,
+  holeX, holeY + holeRadius + flagHeight
+]);
+gl.bufferData(gl.ARRAY_BUFFER, flagVertices, gl.STATIC_DRAW);
+gl.uniform4f(colorLoc, 0.3, 0.2, 0.1, 1.0); // brown pole
+gl.drawArrays(gl.LINES, 0, 2);
+
+// Draw flag triangle
+const flagTipX = holeX + 0.05;
+const flagTipY = holeY + holeRadius + flagHeight - 0.03;
+const flagTriangle = new Float32Array([
+  holeX, holeY + holeRadius + flagHeight,
+  flagTipX, flagTipY,
+  holeX, flagTipY
+]);
+gl.bufferData(gl.ARRAY_BUFFER, flagTriangle, gl.STATIC_DRAW);
+gl.uniform4f(colorLoc, 1.0, 0.0, 0.0, 1.0); // red flag
+gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+
+
+
+
+        // Collision
+        for (let i = 0; i < terrainVertices.length / 2 - 1; i++) {
+  const x1 = terrainVertices[i * 2];
+  const y1 = terrainVertices[i * 2 + 1];
+  const x2 = terrainVertices[(i + 1) * 2];
+  const y2 = terrainVertices[(i + 1) * 2 + 1];
+
+  if (Math.abs(ballY - y1) < ballRadius && ballX > x1 && ballX < x2) {
+    const onSand = isBallOnSandPatch(ballX, ballY, sandPatches);
+
+    if (onSand) {
+      // Stop bouncing, simulate sand drag/friction
+      ballVelocityX *= 0.7;
+      ballVelocityY = 0;
+      ballY = y1 + ballRadius * 0.9;
+    } else {
+      const normal = calculateNormal(x1, y1, x2, y2);
+      const velocity = { x: ballVelocityX, y: ballVelocityY };
+      const reflected = reflectVelocity(velocity, normal);
+
+      ballVelocityX = reflected.x * 0.98;
+      ballVelocityY = reflected.y * bounceFactor;
+      ballY = y1 + ballRadius;
+    }
+
+    break;
+  }
+}
+// Check if ball enters the hole
+const dxHole = ballX - holeX;
+const dyHole = ballY - holeY;
+const distToHole = Math.sqrt(dxHole * dxHole + dyHole * dyHole);
+var inhole = false;
+
+if (distToHole < holeRadius * 2.5) {
+  inhole = true
+
+  // Snap ball to hole and stop it
+  ballX = holeX;
+  ballY = holeY;
+  ballVelocityX = 0;
+  ballVelocityY = 0;
+
+  // Optional: flag game state or win message
+}
+
+
+
+
+
+        // Drag line
+        if (isDragging && dragEnd) {
+          const lineVertices = new Float32Array([ballX, ballY, dragEnd.x, dragEnd.y]);
+          gl.bufferData(gl.ARRAY_BUFFER, lineVertices, gl.STATIC_DRAW);
+          gl.uniform4f(colorLoc, 0.2, 0.2, 1.0, 1.0); // drag line, no gradient
+          gl.drawArrays(gl.LINES, 0, 2);
+        }
+
+        // Ball
+        const circle = createCircleVertices(ballX, ballY, ballRadius, 100);
+        gl.bufferData(gl.ARRAY_BUFFER, circle, gl.STATIC_DRAW);
+        gl.uniform4f(colorLoc, 1.0, 0.0, 0.0, 1.0); // red ball, no gradient
+
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, circle.length / 2);
+
+        requestAnimationFrame(draw);
+      }
+      
+
+      draw();
+    }
+
+    main();
+  </script>
+</body>
+</html>
