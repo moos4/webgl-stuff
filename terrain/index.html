@@ -126,6 +126,9 @@ let timeOfDay = parseInt(timeSelect.value, 10);
 let sunDir = new Float32Array(3);
 updateSunPosition(timeOfDay);
 
+const seedX = Math.random() * 10000;
+const seedZ = Math.random() * 10000;
+
 // --- CONTROL MODE STATE ---
 let inputMode = 'desktop'; // 'desktop' or 'touch'
 let joystickVector = { x: 0, y: 0 };
@@ -372,7 +375,8 @@ function createGroundMesh(size, segments) {
  const segmentSize = size / segments;
  const halfSize = size / 2;
  const noiseScale = 0.05, heightScale = 15.0, vertsPerRow = segments + 1;
- const getHeight = (x, z) => fbm_js([x * noiseScale, 0.0, z * noiseScale]) * heightScale;
+ 
+ const getHeight = (x, z) => fbm_js([(x * noiseScale) + seedX, 0.0, (z * noiseScale) + seedZ]) * heightScale;
 
  for (let i = 0; i <= segments; i++) {
   for (let j = 0; j <= segments; j++) {
@@ -619,9 +623,9 @@ function loop(t){
      pz += right[2] * speed * inputX * dt;
 
      // Terrain Following
-     const noiseScale = 0.05, heightScale = 15.0;
-     let terrainHeight = fbm_js([px * noiseScale, 0.0, pz * noiseScale]) * heightScale;
-     py = terrainHeight + 1.7;
+    const noiseScale = 0.05, heightScale = 15.0;
+    let terrainHeight = fbm_js([(px * noiseScale) + seedX, 0.0, (pz * noiseScale) + seedZ]) * heightScale;
+    py = terrainHeight + 1.7;
 
      resize();
      gl.clearColor(0.5,0.75,1.0,1);
