@@ -11,5 +11,8 @@ a site where i share some of my webgl projects
 Q: is this available on mobile?\
 A: some projects have mobile support, i put a list above where you can see it.
 
-Q: this doesn work how do i fix it\
+Q: *this* doesn't work how do i fix it\
 A: just make a bug report and i will look into it
+
+Q: can you make *this* for me?\
+A: just make an issue with the "commission" tag, but depending on the size of the project I might want to get paid.
