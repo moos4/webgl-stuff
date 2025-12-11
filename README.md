@@ -8,8 +8,8 @@ a site where i share some of my webgl projects
 | [Terrain Generation](https://moos4.github.io/webgl-stuff/terrain/)  | ✅  | ❌  |
 | [Golf](https://moos4.github.io/webgl-stuff/golf/)  | ❌  | ✅  |
 ## FAQ
-Q: is this available on mobile?
+Q: is this available on mobile?\
 A: some projects have mobile support, i put a list above where you can see it.
 
-Q: this doesn work how do i fix it
+Q: this doesn work how do i fix it\
 A: just make a bug report and i will look into it
