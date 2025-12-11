@@ -4,6 +4,7 @@ a site where i share some of my webgl projects
 ## Current projects online
 | Project  | touchscreen support | WIP |
 | :-----------: | :-----------: | :-----------: |
+| [Home Page](https://moos4.github.io/webgl-stuff/) | ✅  | ❌  |
 | [Terrain Generation](https://moos4.github.io/webgl-stuff/terrain/)  | ✅  | ❌  |
 | [Golf](https://moos4.github.io/webgl-stuff/golf/)  | ❌  | ✅  |
 ## FAQ
