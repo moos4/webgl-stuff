@@ -15,4 +15,4 @@ Q: *this* doesn't work how do i fix it\
 A: just make a bug report and i will look into it
 
 Q: can you make *this* for me?\
-A: just make an issue with the "commission" tag, but depending on the size of the project I might want to get paid.
+A: just make an issue with the "commission" tag, but depending on the size of the project I might want to get paid, but that won't happen fast.
