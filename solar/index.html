@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebGL Solar System</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; user-select: none; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #ui-container {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; background: rgba(255, 255, 255, 0.1);
+      padding: 10px 20px; border-radius: 30px; backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2); align-items: center; z-index: 10;
+    }
+    button {
+      background: rgba(0, 0, 0, 0.5); color: white; border: 1px solid rgba(255,255,255,0.3);
+      padding: 8px 15px; font-size: 0.9rem; border-radius: 15px; cursor: pointer; transition: 0.2s;
+    }
+    button:hover { background: rgba(255, 255, 255, 0.2); }
+    button.active { background: #4CAF50; border-color: #fff; }
+    #info-text { position: absolute; top: 10px; width: 100%; text-align: center; color: rgba(255,255,255,0.4); pointer-events: none; }
+    .label {
+      position: absolute; color: white; font-size: 11px; pointer-events: none;
+      text-transform: uppercase; letter-spacing: 1px; text-shadow: 1px 1px 2px black;
+      transform: translate(-50%, -50%); white-space: nowrap; display: none;
+    }
+    #editor-panel {
+    position: absolute; left: 20px; top: 20px; width: 280px; max-height: 90vh;
+    background: rgba(0,0,0,0.85); color: white; padding: 15px; border-radius: 15px;
+    backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); z-index: 100;
+    display: flex; flex-direction: column; font-size: 13px;
+    }
+    .scroll-area { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
+    .planet-item {
+        background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;
+        margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .collapsible-content { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+    .active-content { display: block; }
+    
+    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .row label { font-size: 11px; color: #aaa; flex: 1; }
+    .row input[type="range"] { flex: 2; margin: 0 8px; }
+    .val-span { font-family: monospace; color: #4CAF50; width: 35px; text-align: right; }
+    
+    .moon-box {
+        background: rgba(0,0,0,0.3); padding: 8px; border-radius: 5px; margin-top: 8px;
+        border-left: 2px solid #4CAF50;
+    }
+    .header-main { cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+    input[type="color"] { border: none; width: 25px; height: 25px; cursor: pointer; background: none; }
+    .remove-btn { background-color:red; text-align: center; padding: 4px 8px; border-radius: 8px; border: 2px solid #555555;}
+  </style>
+</head>
+<body>
+
+  <div id="info-text"><h2>Solar System</h2></div>
+  
+  <div id="editor-panel">
+    <h3>System Editor</h3>
+    <div class="scroll-area">
+      <div id="planet-list"></div>
+    </div>
+    <hr>
+    <button onclick="addNewPlanet()" style="width:100%; background:#4CAF50;">+ Add Planet</button>
+    <div style="display:flex; gap:5px; margin-top:10px;">
+      <button onclick="exportSettings()" style="flex:1;">💾 Export</button>
+      <button onclick="document.getElementById('importFile').click()" style="flex:1;">📂 Import</button>
+    </div>
+    <input type="file" id="importFile" style="display:none" onchange="importSettings(event)" accept=".json">
+  </div>
+
+  <div id="ui-container">
+    <button id="btnRev">⏪</button>
+    <button id="btnPause">⏸</button>
+    <button id="btnPlay">▶</button>
+    <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.3); margin: 0 5px;"></div>
+    <button id="btnOrbit" class="active">Orbits</button>
+    <button id="btnLabels" class="active">Labels</button>
+  </div>
+
+  <div id="labels-layer"></div>
+  <canvas id="glcanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl', { antialias: true });
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- 1. TEXTURE GENERATOR ---
+function createProceduralTexture(gl, name, baseColor) {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = `rgb(${baseColor[0]*255}, ${baseColor[1]*255}, ${baseColor[2]*255})`;
+  ctx.fillRect(0, 0, size, size);
+
+  const drawWrapped = (x, y, r, col) => {
+    ctx.fillStyle = col;
+    for (let ox = -size; ox <= size; ox += size) {
+      ctx.beginPath(); ctx.arc(x + ox, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  };
+
+  if (name === 'Sun') {
+    for(let i=0; i<800; i++) drawWrapped(Math.random()*size, Math.random()*size, Math.random()*15+5, `rgba(255, ${200 + Math.random()*55}, 0, 0.3)`);
+  } else if (['Jupiter', 'Saturn', 'Uranus', 'Neptune'].includes(name)) {
+    for (let i=0; i<20; i++) {
+        ctx.fillStyle = (i % 2 === 0) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.05)';
+        ctx.fillRect(0, (size/20)*i, size, size/20);
+    }
+  } else if (name === 'Earth') {
+    for(let i=0; i<30; i++) drawWrapped(Math.random()*size, Math.random()*size, Math.random()*60 + 20, '#228B22');
+    for(let i=0; i<15; i++) drawWrapped(Math.random()*size, Math.random()*size, Math.random()*40, 'rgba(255,255,255,0.3)');
+  } else {
+    for(let i=0; i<300; i++) drawWrapped(Math.random()*size, Math.random()*size, Math.random()*5+1, 'rgba(255,255,255,0.1)');
+  }
+
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  return texture;
+}
+
+// --- 2. SHADERS ---
+const vsSource = `
+  attribute vec3 aPos; attribute vec3 aNorm; attribute vec2 aTex;
+  uniform mat4 uP, uV, uM;
+  varying vec3 vNorm, vWPos; varying vec2 vTex;
+  void main() {
+    vec4 wp = uM * vec4(aPos, 1.0);
+    vWPos = wp.xyz; vNorm = normalize((uM * vec4(aNorm, 0.0)).xyz);
+    vTex = aTex; gl_Position = uP * uV * wp;
+  }
+`;
+const fsSource = `
+  precision mediump float;
+  varying vec3 vNorm, vWPos; varying vec2 vTex;
+  uniform sampler2D uSamp; uniform bool uIsSun; uniform float uAlpha;
+  void main() {
+    vec4 tex = texture2D(uSamp, vTex);
+    if(uIsSun) { gl_FragColor = vec4(tex.rgb, uAlpha); return; }
+    vec3 lightDir = normalize(vec3(0,0,0) - vWPos);
+    float diff = max(dot(vNorm, lightDir), 0.0);
+    gl_FragColor = vec4(tex.rgb * (0.15 + diff), uAlpha);
+  }
+`;
+const vsFlat = `attribute vec3 aPos; uniform mat4 uP, uV, uM; void main() { gl_Position = uP * uV * uM * vec4(aPos, 1.0); gl_PointSize = 1.2; }`;
+const fsFlat = `precision mediump float; uniform vec4 uCol; void main() { gl_FragColor = uCol; }`;
+
+function createProg(gl, vs, fs) {
+  const s = (t, src) => { const sh = gl.createShader(t); gl.shaderSource(sh, src); gl.compileShader(sh); return sh; };
+  const p = gl.createProgram(); gl.attachShader(p, s(gl.VERTEX_SHADER, vs)); gl.attachShader(p, s(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p); return p;
+}
+const mainProg = createProg(gl, vsSource, fsSource);
+const flatProg = createProg(gl, vsFlat, fsFlat);
+
+// --- 3. GEOMETRY ---
+function createSphere(r, b) {
+  const p=[], n=[], t=[], idx=[];
+  for(let i=0; i<=b; i++) {
+    let theta = i*Math.PI/b, sinT=Math.sin(theta), cosT=Math.cos(theta);
+    for(let j=0; j<=b; j++) {
+      let phi = j*2*Math.PI/b, x=Math.cos(phi)*sinT, y=cosT, z=Math.sin(phi)*sinT;
+      p.push(r*x,r*y,r*z); n.push(x,y,z); t.push(j/b, 1-i/b);
+    }
+  }
+  for(let i=0; i<b; i++) {
+    for(let j=0; j<b; j++) {
+      let f=(i*(b+1))+j, s=f+b+1; idx.push(f,s,f+1, s,s+1,f+1);
+    }
+  }
+  return {p, n, t, idx};
+}
+function createRingGeom(inner, outer, steps) {
+  const p = [], n = [], t = [], idx = [];
+  for(let i=0; i<=steps; i++) {
+    let a = (i/steps) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+    p.push(c*inner, 0, s*inner, c*outer, 0, s*outer);
+    n.push(0,1,0, 0,1,0);
+    t.push(0, i/steps, 1, i/steps);
+  }
+  for(let i=0; i<steps; i++) { idx.push(i*2, i*2+1, (i+1)*2, (i+1)*2, i*2+1, (i+1)*2+1); }
+  return {p, n, t, idx};
+}
+
+const sData = createSphere(1, 32);
+const rLineData = []; for(let i=0; i<=128; i++) { let a=(i/128)*Math.PI*2; rLineData.push(Math.cos(a), 0, Math.sin(a)); }
+const saturnRingData = createRingGeom(1.4, 2.2, 64);
+
+const bufs = {
+  pos: gl.createBuffer(), norm: gl.createBuffer(), tex: gl.createBuffer(), idx: gl.createBuffer(),
+  ringLine: gl.createBuffer(), sRingPos: gl.createBuffer(), sRingIdx: gl.createBuffer()
+};
+gl.bindBuffer(gl.ARRAY_BUFFER, bufs.pos); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sData.p), gl.STATIC_DRAW);
+gl.bindBuffer(gl.ARRAY_BUFFER, bufs.norm); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sData.n), gl.STATIC_DRAW);
+gl.bindBuffer(gl.ARRAY_BUFFER, bufs.tex); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sData.t), gl.STATIC_DRAW);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(sData.idx), gl.STATIC_DRAW);
+gl.bindBuffer(gl.ARRAY_BUFFER, bufs.ringLine); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(rLineData), gl.STATIC_DRAW);
+gl.bindBuffer(gl.ARRAY_BUFFER, bufs.sRingPos); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(saturnRingData.p), gl.STATIC_DRAW);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.sRingIdx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(saturnRingData.idx), gl.STATIC_DRAW);
+
+const stars = []; for(let i=0; i<12000; i++) stars.push((Math.random()-0.5)*2500);
+const starBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, starBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(stars), gl.STATIC_DRAW);
+
+// --- 4. DATA ---
+let planets = [
+  { name: "Sun", r: 5.5, dist: 0, speed: 0, color: [1, 0.9, 0.3], isSun: true },
+  { name: "Mercury", r: 0.8, dist: 12, speed: 1.8, color: [0.6, 0.6, 0.6] },
+  { name: "Venus", r: 1.3, dist: 18, speed: 1.4, color: [0.8, 0.7, 0.3] },
+  { name: "Earth", r: 1.4, dist: 25, speed: 1.0, color: [0.1, 0.4, 0.9], hasMoon: true, moonSettings: {
+    r: 0.4, dist: 4.5, speed: 3.5, color: [0.6, 0.6, 0.6]}
+  },
+  { name: "Mars", r: 1.1, dist: 32, speed: 0.8, color: [0.8, 0.3, 0.1] },
+  { name: "Jupiter", r: 3.8, dist: 48, speed: 0.4, color: [0.7, 0.6, 0.5] },
+  { name: "Saturn", r: 3.2, dist: 65, speed: 0.3, color: [0.8, 0.7, 0.5], hasRings: true },
+  { name: "Uranus", r: 2.2, dist: 80, speed: 0.2, color: [0.5, 0.8, 0.8] },
+  { name: "Neptune", r: 2.2, dist: 95, speed: 0.15, color: [0.2, 0.3, 0.9] },
+];
+
+
+
+const labelLayer = document.getElementById('labels-layer');
+
+function initPlanet(p) {
+  p.tex = createProceduralTexture(gl, p.name, p.color);
+  p.el = document.createElement('div');
+  p.el.className = 'label';
+  p.el.innerText = p.name;
+  labelLayer.appendChild(p.el);
+  if (p.hasMoon && p.moonSettings) {
+    p.moonSettings.tex = createProceduralTexture(gl, p.name + "_moon", p.moonSettings.color);
+  }
+}
+
+// --- Helper: Color Conversion ---
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return [r, g, b];
+}
+function rgbToHex(rgb) {
+  const f = x => Math.round(x * 255).toString(16).padStart(2, '0');
+  return `#${f(rgb[0])}${f(rgb[1])}${f(rgb[2])}`;
+}
+
+function refreshUI() {
+  const container = document.getElementById('planet-list');
+  container.innerHTML = '';
+  planets.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className = 'planet-item';
+    
+    // Check if moon exists to set checkbox
+    const hasMoon = !!p.hasMoon;
+
+    item.innerHTML = `
+      <div class="header-main" onclick="toggleExpand(${i})">
+        <strong id="head-name-${i}">${p.name}</strong>
+        <span>${p.isSun ? '☀️' : '🪐'} ▼</span>
+      </div>
+      <div id="content-${i}" class="collapsible-content">
+        <button class="remove-btn" onclick="removePlanet(${i})">✕ Remove</button>
+        
+        <div class="row">
+          <label>Rename</label>
+          <input type="text" value="${p.name}" oninput="renamePlanet(${i}, this.value)">
+        </div>
+        <div class="row">
+          <label>Color</label>
+          <input type="color" value="${rgbToHex(p.color)}" onchange="updateColor(${i}, this.value)">
+        </div>
+
+        <div class="row">
+          <label>Size</label>
+          <input type="range" min="0.1" max="10" step="0.1" value="${p.r}" oninput="updateVal(${i}, 'r', this.value, 'r-v-${i}')">
+          <span class="val-span" id="r-v-${i}">${p.r}</span>
+        </div>
+
+        <div class="row">
+          <label>Dist</label>
+          <input type="range" min="0" max="200" step="1" value="${p.dist}" oninput="updateVal(${i}, 'dist', this.value, 'd-v-${i}')">
+          <span class="val-span" id="d-v-${i}">${p.dist}</span>
+        </div>
+
+        <div class="row">
+          <label>Speed</label>
+          <input type="range" min="-5" max="5" step="0.1" value="${p.speed}" oninput="updateVal(${i}, 'speed', this.value, 's-v-${i}')">
+          <span class="val-span" id="s-v-${i}">${p.speed}</span>
+        </div>
+
+        <hr style="opacity:0.1">
+        
+        <div class="row">
+          <label>Has Moon</label>
+          <input type="checkbox" ${hasMoon ? 'checked' : ''} onchange="toggleMoon(${i}, this.checked)">
+        </div>
+
+        ${hasMoon ? `
+          <div class="moon-box">
+            <div class="header-main" onclick="event.stopPropagation(); toggleExpandMoon(${i})">
+              <strong>Moon Settings</strong> <span>▼</span>
+            </div>
+            <div id="moon-content-${i}" class="collapsible-content">
+               <div class="row">
+                <label>M-Size</label>
+                <input type="range" min="0.1" max="3" step="0.1" value="${p.moonSettings.r}" oninput="updateMoonVal(${i}, 'r', this.value, 'mr-v-${i}')">
+                <span class="val-span" id="mr-v-${i}">${p.moonSettings.r}</span>
+              </div>
+              <div class="row">
+                <label>M-Dist</label>
+                <input type="range" min="1" max="20" step="0.5" value="${p.moonSettings.dist}" oninput="updateMoonVal(${i}, 'dist', this.value, 'md-v-${i}')">
+                <span class="val-span" id="md-v-${i}">${p.moonSettings.dist}</span>
+              </div>
+              <div class="row">
+                <label>M-Speed</label>
+                <input type="range" min="-5" max="5" step="0.1" value="${p.moonSettings.speed}" oninput="updateMoonVal(${i}, 'speed', this.value, 'ms-v-${i}')">
+                <span class="val-span" id="ms-v-${i}">${p.moonSettings.speed}</span>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+// --- Actions ---
+window.renamePlanet = (i, name) => {
+  planets[i].name = name;
+  // Update the sidebar header
+  const header = document.getElementById(`head-name-${i}`);
+  if (header) header.innerText = name;
+  // Update the 3D floating label
+  if (planets[i].el) planets[i].el.innerText = name;
+};
+
+window.toggleExpand = (i) => document.getElementById(`content-${i}`).classList.toggle('active-content');
+window.toggleExpandMoon = (i) => document.getElementById(`moon-content-${i}`).classList.toggle('active-content');
+
+window.updateVal = (index, prop, val, spanId) => {
+  planets[index][prop] = parseFloat(val);
+  document.getElementById(spanId).innerText = val;
+};
+
+window.updateMoonVal = (index, prop, val, spanId) => {
+  planets[index].moonSettings[prop] = parseFloat(val);
+  document.getElementById(spanId).innerText = val;
+};
+
+window.updateColor = (index, hex) => {
+  planets[index].color = hexToRgb(hex);
+  // Re-generate texture to apply new color
+  planets[index].tex = createProceduralTexture(gl, planets[index].name, planets[index].color);
+};
+
+window.toggleMoon = (index, checked) => {
+  if (checked) {
+    planets[index].hasMoon = true;
+    planets[index].moonSettings = { r: 0.4, dist: 4, speed: 2, color: [0.6, 0.6, 0.6] };
+    planets[index].moonSettings.tex = createProceduralTexture(gl, "moon", [0.6, 0.6, 0.6]);
+  } else {
+    planets[index].hasMoon = false;
+  }
+  refreshUI();
+};
+
+
+
+window.removePlanet = (index) => {
+  if (planets[index].el) planets[index].el.remove();
+  planets.splice(index, 1);
+  refreshUI();
+};
+
+window.addNewPlanet = () => {
+  const newP = {
+    name: "Planet " + planets.length,
+    r: 1 + Math.random()*2,
+    dist: 20 + planets.length * 10,
+    speed: 0.5 + Math.random(),
+    color: [Math.random(), Math.random(), Math.random()]
+  };
+  initPlanet(newP);
+  planets.push(newP);
+  refreshUI();
+};
+
+// --- IMPORT / EXPORT ---
+window.exportSettings = () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(planets));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", "solar_system_config.json");
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+};
+
+window.importSettings = (event) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const imported = JSON.parse(e.target.result);
+    // Cleanup old labels
+    planets.forEach(p => p.el && p.el.remove());
+    planets = imported;
+    planets.forEach(initPlanet);
+    refreshUI();
+  };
+  reader.readAsText(event.target.files[0]);
+};
+
+
+planets.forEach(initPlanet);
+refreshUI();
+//const moonTex = createProceduralTexture(gl, 'Moon', [0.6, 0.6, 0.6]);
+
+let simTime=0, lastT=performance.now(), paused=false, timeScale=1, showOrbits=true, showLabels=true;
+
+document.getElementById('btnPlay').onclick = () => { paused=false; timeScale=1; };
+document.getElementById('btnPause').onclick = () => { paused=true; };
+document.getElementById('btnRev').onclick = () => { paused=false; timeScale=-1; };
+document.getElementById('btnOrbit').onclick = (e) => { showOrbits=!showOrbits; e.target.classList.toggle('active'); };
+document.getElementById('btnLabels').onclick = (e) => { showLabels=!showLabels; e.target.classList.toggle('active'); labelLayer.style.display = showLabels?'block':'none'; };
+
+// Camera
+let angX=0, angY=0.5, zoom=120, dragging=false, lx, ly;
+canvas.onmousedown = e => { dragging=true; lx=e.clientX; ly=e.clientY; };
+window.onmouseup = () => dragging=false;
+window.onmousemove = e => { if(dragging) { angX-=(e.clientX-lx)*0.005; angY=Math.max(0.1, Math.min(1.5, angY-(e.clientY-ly)*0.005)); lx=e.clientX; ly=e.clientY; }};
+canvas.onwheel = e => { zoom = Math.max(20, Math.min(800, zoom + e.deltaY*0.1)); e.preventDefault(); };
+
+// --- 5. FIXED MATRIX MATH ---
+const M4 = {
+  id: () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  persp: (fovy, asp, n, f) => { const s=1/Math.tan(fovy/2), d=1/(n-f); return new Float32Array([s/asp,0,0,0, 0,s,0,0, 0,0,(f+n)*d,-1, 0,0,2*f*n*d,0]); },
+  lookAt: (e, c, u) => {
+    const z = normalize([e[0]-c[0], e[1]-c[1], e[2]-c[2]]), x = normalize(cross(u, z)), y = cross(z, x);
+    return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0, -dot(x,e),-dot(y,e),-dot(z,e),1]);
+  },
+  translate: (m, v) => {
+    m[12] += m[0]*v[0] + m[4]*v[1] + m[8]*v[2];
+    m[13] += m[1]*v[0] + m[5]*v[1] + m[9]*v[2];
+    m[14] += m[2]*v[0] + m[6]*v[1] + m[10]*v[2];
+  },
+  // FIXED SCALE: Multiply the entire basis, not just the diagonal
+  scale: (m, s) => {
+    m[0]*=s[0]; m[1]*=s[0]; m[2]*=s[0];
+    m[4]*=s[1]; m[5]*=s[1]; m[6]*=s[1];
+    m[8]*=s[2]; m[9]*=s[2]; m[10]*=s[2];
+  },
+  rotateY: (m, r) => {
+    const s=Math.sin(r), c=Math.cos(r), a0=m[0], a1=m[1], a2=m[2], a8=m[8], a9=m[9], a10=m[10];
+    m[0]=a0*c-a8*s; m[1]=a1*c-a9*s; m[2]=a2*c-a10*s;
+    m[8]=a0*s+a8*c; m[9]=a1*s+a9*c; m[10]=a2*s+a10*c;
+  }
+};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const normalize=a=>{const l=1/Math.hypot(...a); return a.map(v=>v*l);};
+
+// --- 6. RENDER LOOP ---
+function draw(now) {
+  const dt=(now-lastT)*0.001; lastT=now; if(!paused) simTime+=dt*timeScale;
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST);
+
+  const pMat = M4.persp(45*Math.PI/180, canvas.width/canvas.height, 0.1, 5000);
+  const camP = [Math.sin(angX)*zoom*Math.cos(angY), Math.sin(angY)*zoom, Math.cos(angX)*zoom*Math.cos(angY)];
+  const vMat = M4.lookAt(camP, [0,0,0], [0,1,0]);
+
+  // Orbit Lines
+  gl.useProgram(flatProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(flatProg, 'uP'), false, pMat);
+  gl.uniformMatrix4fv(gl.getUniformLocation(flatProg, 'uV'), false, vMat);
+  if(showOrbits) {
+    gl.uniform4f(gl.getUniformLocation(flatProg, 'uCol'), 1, 1, 1, 0.1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs.ringLine); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0); gl.enableVertexAttribArray(0);
+    planets.forEach(p => { if(p.dist>0){ let m=M4.id(); M4.scale(m,[p.dist,1,p.dist]); gl.uniformMatrix4fv(gl.getUniformLocation(flatProg, 'uM'),false,m); gl.drawArrays(gl.LINE_LOOP,0,128); }});
+  }
+
+  // Stars
+  gl.uniform4f(gl.getUniformLocation(flatProg, 'uCol'), 1, 1, 1, 0.5);
+  gl.bindBuffer(gl.ARRAY_BUFFER, starBuf); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+  gl.uniformMatrix4fv(gl.getUniformLocation(flatProg, 'uM'), false, M4.id());
+  gl.drawArrays(gl.POINTS, 0, 4000);
+
+  // Planets
+  gl.useProgram(mainProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(mainProg, 'uP'), false, pMat);
+  gl.uniformMatrix4fv(gl.getUniformLocation(mainProg, 'uV'), false, vMat);
+  
+  const aPos=gl.getAttribLocation(mainProg,'aPos'), aNorm=gl.getAttribLocation(mainProg,'aNorm'), aTex=gl.getAttribLocation(mainProg,'aTex');
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.pos); gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0); gl.enableVertexAttribArray(aPos);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.norm); gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0); gl.enableVertexAttribArray(aNorm);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.tex); gl.vertexAttribPointer(aTex,2,gl.FLOAT,false,0,0); gl.enableVertexAttribArray(aTex);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx);
+
+  // 1. Draw all Planets and the Sun's solid core first
+planets.forEach(p => {
+  let m = M4.id();
+  const ang = simTime * p.speed * 0.4;
+  M4.translate(m, [Math.cos(ang) * p.dist, 0, Math.sin(ang) * p.dist]);
+
+  // Label Logic (Keep your existing label logic here)
+  if (showLabels) {
+    const v = [m[12], m[13], m[14], 1];
+    const viewV = [v[0]*vMat[0]+v[1]*vMat[4]+v[2]*vMat[8]+vMat[12], v[0]*vMat[1]+v[1]*vMat[5]+v[2]*vMat[9]+vMat[13], v[0]*vMat[2]+v[1]*vMat[6]+v[2]*vMat[10]+vMat[14], v[0]*vMat[3]+v[1]*vMat[7]+v[2]*vMat[11]+vMat[15]];
+    const clipV = [viewV[0]*pMat[0], viewV[1]*pMat[5], viewV[2]*pMat[10]+viewV[3]*pMat[14], -viewV[2]];
+    if(clipV[3]>0){
+      p.el.style.left = (clipV[0]/clipV[3]*0.5+0.5)*window.innerWidth+'px';
+      p.el.style.top = (1.0-(clipV[1]/clipV[3]*0.5+0.5))*window.innerHeight - (p.r*5+15) + 'px';
+      p.el.style.display = 'block';
+    } else p.el.style.display = 'none';
+  }
+
+  p.lastM = new Float32Array(m); // Save position for rings/moons
+  
+  let renderM = new Float32Array(m);
+  M4.rotateY(renderM, simTime * 0.5);
+  M4.scale(renderM, [p.r, p.r, p.r]);
+
+  gl.useProgram(mainProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(mainProg, 'uM'), false, renderM);
+  gl.uniform1i(gl.getUniformLocation(mainProg, 'uIsSun'), p.isSun ? 1 : 0);
+  gl.uniform1f(gl.getUniformLocation(mainProg, 'uAlpha'), 1.0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, p.isSun ? p.tex : (p.name === 'Moon' ? moonTex : p.tex));
+  gl.drawElements(gl.TRIANGLES, sData.idx.length, gl.UNSIGNED_SHORT, 0);
+
+  // Saturn's Rings
+  if(p.hasRings) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    let rm = new Float32Array(p.lastM);
+    M4.rotateY(rm, simTime * 0.2);
+    gl.uniformMatrix4fv(gl.getUniformLocation(mainProg, 'uM'), false, rm);
+    gl.uniform1f(gl.getUniformLocation(mainProg, 'uAlpha'), 0.6);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs.sRingPos); gl.vertexAttribPointer(gl.getAttribLocation(mainProg,'aPos'), 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.sRingIdx);
+    gl.drawElements(gl.TRIANGLES, saturnRingData.idx.length, gl.UNSIGNED_SHORT, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs.pos); gl.vertexAttribPointer(gl.getAttribLocation(mainProg,'aPos'), 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx);
+    gl.disable(gl.BLEND);
+  }
+
+  // Moon
+  if (p.hasMoon && p.moonSettings) {
+    const ms = p.moonSettings;
+    const moonAng = simTime * ms.speed * 2.0; // Increased speed multiplier for visibility
+    
+    // Create a new matrix starting from the planet's center (p.lastM)
+    let mm = new Float32Array(p.lastM);
+    
+    // Orbit the moon around that center
+    M4.translate(mm, [Math.cos(moonAng) * ms.dist, 0, Math.sin(moonAng) * ms.dist]);
+    M4.scale(mm, [ms.r, ms.r, ms.r]);
+    
+    gl.useProgram(mainProg);
+    gl.uniformMatrix4fv(gl.getUniformLocation(mainProg, 'uM'), false, mm);
+    gl.uniform1i(gl.getUniformLocation(mainProg, 'uIsSun'), 0);
+    gl.uniform1f(gl.getUniformLocation(mainProg, 'uAlpha'), 1.0);
+    
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, ms.tex);
+    gl.drawElements(gl.TRIANGLES, sData.idx.length, gl.UNSIGNED_SHORT, 0);
+  }
+});
+
+// 2. SECOND PASS: Render Sun Bloom ON TOP of everything
+const sun = planets[0]; // Assuming Sun is first in array
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending
+gl.depthMask(false); // Ignore depth so it renders over planets
+
+for(let i=1; i<=12; i++) {
+  let bm = M4.id();
+  let s = sun.r * (1 + i * 0.08);
+  M4.scale(bm, [s, s, s]);
+  gl.uniformMatrix4fv(gl.getUniformLocation(mainProg, 'uM'), false, bm);
+  gl.uniform1i(gl.getUniformLocation(mainProg, 'uIsSun'), 1);
+  gl.uniform1f(gl.getUniformLocation(mainProg, 'uAlpha'), 0.25 / i);
+  gl.bindTexture(gl.TEXTURE_2D, sun.tex);
+  gl.drawElements(gl.TRIANGLES, sData.idx.length, gl.UNSIGNED_SHORT, 0);
+}
+
+gl.depthMask(true);
+gl.disable(gl.BLEND);
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
