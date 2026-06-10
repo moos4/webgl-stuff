@@ -93,5 +93,6 @@ const geometries = {
 };
 ```
 2. then put that code in an issue
+2,5. if you add new enemies and want new geometries, look [here.](https://threejs.org/docs/#BoxGeometry)
 3. I'll revieuw it and might add it in
 4. SUCCESS
