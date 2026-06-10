@@ -382,7 +382,7 @@
             inventory.armors.forEach((a, index) => {
                 html += `<button class="btn-def" onclick="equipItemFromBag('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
             });
-            html += `<div style="width:100%; text-align:center; color:#ff5555; font-size:0.9rem; margin-bottom:5px;">--- WEAPONS BAG ---</div>`;
+            html += `<div style="width:100%; text-align:center; color:#0800ff; font-size:0.9rem; margin-bottom:5px;">--- ITEMS BAG ---</div>`;
             html += `<button class="btn-pot" onclick="useItem('hp')">❤️ HP POTION (${inventory.hpPotions})</button>`;
             html += `<button class="btn-spl" onclick="useItem('mp')">🧪 MP POTION (${inventory.mpPotions})</button>`;
             html += `<div style="width:100%; margin-top:20px; text-align:center;"><button class="btn-back" onclick="exitExplorationInventory()">↩ CLOSE</button></div>`;
@@ -534,12 +534,14 @@
                 inventory.hpPotions--; pHP = Math.min(pMaxHP, pHP + 20);
                 UI.prompt.innerText = "DRANK HP POTION (+20 HP)";
                 triggerFlash("rgba(85,255,85,0.2)");
-                if (state == "BATTLE") { advanceTurn()};
+                updateHUD()
+                if (state == "BATTLE") { advanceTurn()} else {exitExplorationInventory(); renderExplorationInventory()};
             } else if (type === 'mp' && inventory.mpPotions > 0) {
                 inventory.mpPotions--; pMP = Math.min(pMaxMP, pMP + 15);
                 UI.prompt.innerText = "DRANK MP POTION (+15 MP)";
                 triggerFlash("rgba(68,136,255,0.2)");
-                if (state == "BATTLE") { advanceTurn()};
+                updateHUD()
+                if (state == "BATTLE") { advanceTurn()} else {exitExplorationInventory(); renderExplorationInventory()};
             } else {
                 UI.prompt.innerText = "OUT OF POTIONS!";
             }
