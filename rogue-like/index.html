@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modular 3D WebGL Roguelike</title>
+    <title>Modular 3D WebGL Roguelike - RPG Inventory Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Arial Black', Gadget, sans-serif; user-select: none; color: #fff; }
         #webgl-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
@@ -12,11 +12,15 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;
             display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;
         }
-        .top-bar { display: flex; justify-content: space-between; padding: 20px 40px; font-size: 1.2rem; letter-spacing: 2px; }
-        .stat-box { background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 5px; border: 1px solid #444; }
-        .hp-bar-container { width: 200px; height: 20px; background: #331111; border: 2px solid #ff4444; margin-top: 5px; overflow: hidden; }
-        #player-hp-fill { width: 100%; height: 100%; background: #ff4444; transition: width 0.2s; }
+        .top-bar { display: flex; justify-content: space-between; padding: 20px 40px; font-size: 1rem; letter-spacing: 1px; }
+        .stat-box { background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; border: 1px solid #444; min-width: 250px; }
         
+        .bar-container { width: 100%; height: 15px; background: #222; border: 1px solid #666; margin-top: 5px; overflow: hidden; position: relative;}
+        #player-hp-fill { width: 100%; height: 100%; background: #ff4444; transition: width 0.2s; }
+        #player-mp-fill { width: 100%; height: 100%; background: #4488ff; transition: width 0.2s; }
+        
+        .equipment-text { font-size: 0.85rem; color: #aaa; margin-top: 8px; border-top: 1px solid #444; padding-top: 5px; }
+
         #enemy-hud { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); text-align: center; display: none; }
         #enemy-name { font-size: 1.5rem; color: #ff3333; text-transform: uppercase; margin-bottom: 5px; text-shadow: 0 0 10px #ff0000; }
         .enemy-hp-container { width: 300px; height: 15px; background: #220000; border: 1px solid #ff3333; }
@@ -33,7 +37,7 @@
 
         #combat-actions {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
-            display: none; gap: 20px; pointer-events: auto;
+            display: none; flex-wrap: wrap; justify-content: center; gap: 15px; pointer-events: auto; max-width: 800px;
         }
         #center-prompt {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
@@ -42,18 +46,19 @@
         }
 
         button {
-            background: #111; color: #fff; border: 3px solid #666; padding: 15px 30px;
-            font-family: inherit; font-size: 1.2rem; font-weight: bold; cursor: pointer;
-            border-radius: 8px; box-shadow: 0 5px 0 #333; transition: all 0.1s;
+            background: #111; color: #fff; border: 2px solid #666; padding: 12px 25px;
+            font-family: inherit; font-size: 1.1rem; font-weight: bold; cursor: pointer;
+            border-radius: 6px; box-shadow: 0 4px 0 #333; transition: all 0.1s; min-width: 140px;
         }
         button:hover { background: #222; border-color: #fff; }
-        button:active { transform: translateY(4px); box-shadow: 0 1px 0 #333; }
-        .btn-atk { border-color: #ff3333; color: #ff3333; }
-        .btn-def { border-color: #3388ff; color: #3388ff; }
-        .btn-pot { border-color: #33ff33; color: #33ff33; }
-        .btn-spl { border-color: #e066ff; color: #e066ff; }
+        button:active { transform: translateY(4px); box-shadow: 0 0px 0 #333; }
+        .btn-atk { border-color: #ff5555; color: #ff5555; }
+        .btn-def { border-color: #aaaaaa; color: #aaaaaa; }
+        .btn-pot { border-color: #55ff55; color: #55ff55; }
+        .btn-spl { border-color: #aa55ff; color: #aa55ff; }
+        .btn-back { border-color: #ffaa00; color: #ffaa00; }
 
-        #flash-overlay { position: absolute; top:0; left:0; width:100vw; height:100vh; z-index: 5; pointer-events: none; background: rgba(255,0,0,0); }
+        #flash-overlay { position: absolute; top:0; left:0; width:100vw; height:100vh; z-index: 5; pointer-events: none; background: rgba(255,0,0,0); transition: background 0.1s;}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -70,13 +75,17 @@
             <div class="stat-box">
                 LVL: <span id="lbl-level" style="color: #33aaff;">1</span> |
                 EXP: <span id="lbl-exp">0</span>/<span id="lbl-exp-needed">10</span><br>
-                DEPTH: <span id="lbl-depth">1</span>
-                <div class="hp-bar-container"><div id="player-hp-fill"></div></div>
+                HP: <span id="lbl-hp">30/30</span>
+                <div class="bar-container" style="border-color:#ff4444;"><div id="player-hp-fill"></div></div>
+                MP: <span id="lbl-mp">10/10</span>
+                <div class="bar-container" style="border-color:#4488ff;"><div id="player-mp-fill"></div></div>
             </div>
             <div class="stat-box" style="text-align: right;">
-                GOLD: <span id="lbl-gold" style="color: #ffd700;">0</span><br>
-                POTIONS: <span id="lbl-pots" style="color: #33ff33;">3</span><br>
-                SCROLLS: <span id="lbl-scrolls" style="color: #e066ff;">0</span>
+                DEPTH: <span id="lbl-depth">1</span> | GOLD: <span id="lbl-gold" style="color: #ffd700;">0</span><br>
+                <div class="equipment-text">
+                    ⚔️ WEP: <span id="lbl-wep" style="color:#fff;">RUSTY DAGGER (+2)</span><br>
+                    🛡️ ARM: <span id="lbl-arm" style="color:#fff;">CLOTH TUNIC (+1)</span>
+                </div>
             </div>
         </div>
 
@@ -87,167 +96,125 @@
 
         <div id="center-prompt">CLICK TO START</div>
 
-        <div id="combat-actions">
-            <button class="btn-atk" onclick="handleAction('attack')">⚔️ ATTACK</button>
-            <button class="btn-def" onclick="combatAction('defend')">🛡️ DEFEND</button>
-            <button class="btn-pot" onclick="combatAction('heal')">🧪 POTION</button>
-            <button class="btn-spl" onclick="combatAction('spell')">🔮 SPELL</button>
-        </div>
+        <div id="combat-actions"></div>
     </div>
 
     <script>
         // ==========================================
+        //  GLOBAL STATE & INVENTORY
+        // ==========================================
+        let pHP = 30, pMaxHP = 30, pMP = 10, pMaxMP = 10;
+        let pLevel = 1, pExp = 0, pExpNeeded = 10;
+        let gold = 20, depth = 0;
+        
+        // Structured Inventory Tracking Architecture
+        let inventory = {
+            hpPotions: 2,
+            mpPotions: 1,
+            weapons: [],
+            armors: []
+        };
+
+        let equipment = {
+            weapon: { name: "RUSTY DAGGER", atk: 2 },
+            armor:  { name: "CLOTH TUNIC", def: 1 }
+        };
+
+        let knownSpells = [
+            { id: "zap", name: "⚡ SPARK", cost: 3, baseDmg: 8, color: "rgba(255,255,0,0.4)" }
+        ];
+
+        const ALL_SPELLS = [
+            { id: "fireball", name: "🔥 FIREBALL", cost: 6, baseDmg: 18, color: "rgba(255,68,0,0.4)" },
+            { id: "ice", name: "❄️ ICE LANCE", cost: 5, baseDmg: 14, color: "rgba(0,200,255,0.4)" },
+            { id: "drain", name: "🌿 DRAIN SOUL", cost: 8, baseDmg: 12, heals: 10, color: "rgba(50,255,50,0.4)" },
+            { id: "void", name: "🌌 VOID CRUSH", cost: 12, baseDmg: 35, color: "rgba(150,0,255,0.4)" }
+        ];
+
+        const EQUIPMENT_REGISTRY = {
+            weapons: [
+                { name: "STEEL SWORD", baseAtk: 4 },
+                { name: "WARHAMMER", baseAtk: 6 },
+                { name: "BATTLE AXE", baseAtk: 8 },
+                { name: "OBSIDIAN BLADE", baseAtk: 12 },
+                { name: "VOID SCYTHE", baseAtk: 15 }
+            ],
+            armors: [
+                { name: "CHAINMAIL", baseDef: 3 },
+                { name: "IRON PLATE", baseDef: 5 },
+                { name: "DRAGON SCALE", baseDef: 8 },
+                { name: "SHADOW CLOAK", baseDef: 12 },
+                { name: "AEGIS ARMOR", baseDef: 15 }
+            ]
+        };
+
+        let activeEnemy = { blueprint: null, hp: 0, max: 0, atk: 0 };
+        let state = "START_SCREEN";
+        let currentLeftRoom = null, currentRightRoom = null;
+
+        // ==========================================
         //  CONTENT DATABASE
         // ==========================================
-
         const ROOM_POOL = [
             {
-                name: "Shattered Armory",
-                chance: 25,
-                color: 0xaa5533,
+                name: "Shattered Armory", chance: 25, color: 0xaa5533,
                 action: function() {
-                    if (Math.random() < 0.70) {
-                        battleEnemy("IRON GOLEM");
-                    } else {
-                        giveGold(15 + depth, "FOUND AN UNTOUCHED WEAPON RACK!");
-                    }
+                    if (Math.random() < 0.6) battleEnemy("IRON GOLEM");
+                    else grantEquipment();
                 }
             },
             {
-                name: "Fae Glade Ruins",
-                chance: 20,
-                color: 0x33ff99,
+                name: "Fae Glade Ruins", chance: 20, color: 0x33ff99,
                 action: function() {
-                    if (Math.random() < 0.60) {
-                        healPlayer(12, "YOU GOT HEALED BY THE FAES");
-                    } else {
-                        battleEnemy("VOID WRAITH");
-                    }
+                    if (Math.random() < 0.5) healPlayer(20, "YOU RESTED IN THE FAE GLADE");
+                    else battleEnemy("PLAGUE STALKER");
                 }
             },
             {
-                name: "Cursed Burial Grounds",
-                chance: 25,
-                color: 0xff3333,
-                action: function() {
-                    battleEnemy("SABER WOLF");
-                }
+                name: "Cursed Burial Grounds", chance: 25, color: 0xff3333,
+                action: function() { battleEnemy("SABER WOLF"); }
             },
             {
-                name: "Strange Bazaar",
-                chance: 25,
-                color: 0xffaa00,
-                action: function() {
-                    openShop();
-                }
+                name: "Strange Bazaar", chance: 20, color: 0xffaa00,
+                action: function() { openShop(); }
             },
             {
-                name: "Obsidian Core",
-                chance: 20,
-                color: 0xff5500,
+                name: "Sunken Library", chance: 15, color: 0xe066ff,
                 action: function() {
-                    if (Math.random() < 0.5) {
-                        battleEnemy("MAGMA DREDGE");
-                    } else {
-                        giveGold(20 + (depth * 2), "MINED MAGMATIC CORE CRYSTALS!");
-                    }
-                }
-            },
-            {
-                name: "Sunken Library",
-                chance: 15,
-                color: 0xe066ff,
-                action: function() {
-                    scrolls += 2;
-                    UI.prompt.innerHTML = "YOU DECIPHERED AN ANCIENT PEDESTAL!<br><span style='color:#e066ff'>+2 SPELL SCROLLS ACQUIRED</span>";
-                    const mat = new THREE.MeshStandardMaterial({color: 0xe066ff, wireframe: true});
-                    mainTarget = new THREE.Mesh(geometries.wraith, mat);
-                    scene.add(mainTarget);
-                    updateHUD();
-                    triggerFlash("rgba(224,102,255,0.2)");
-                    setNextActionTimeout();
-                }
-            },
-            {
-                name: "Toxic Catacombs",
-                chance: 20,
-                color: 0x75ff33,
-                action: function() {
-                    if (Math.random() < 0.65) {
-                        battleEnemy("PLAGUE STALKER");
-                    } else {
-                        pots++;
-                        healPlayer(6, "SALVAGED AN ABANDONED ALCHEMY LAB STASH!");
-                    }
+                    if (Math.random() < 0.3) battleEnemy("VOID WRAITH");
+                    else grantSpellScroll();
                 }
             }
         ];
 
         const ENEMY_REGISTRY = {
             "SABER WOLF": {
-                model: "wolf",
-                color: 0xff3333,
-                calculateHealth: function(lvl) { return 12 + (lvl * 3); },
-                calculateAttack: function(lvl) { return 4 + Math.floor(lvl / 2); },
-                expValue: 6,
-                actions: [
-                    { type: "attack", text: "THE WOLF BITES RUTHLESSLY!", modifier: 1.0 },
-                    { type: "attack", text: "THE WOLF SLASHES WITH ITS CLAWS!", modifier: 0.8 }
-                ]
+                model: "wolf", color: 0xff3333,
+                hp: (lvl) => 15 + (lvl * 4), atk: (lvl) => 4 + Math.floor(lvl * 1.5), expValue: 6,
+                actions: [{ type: "attack", text: "THE WOLF BITES!", mod: 1.0 }]
             },
             "IRON GOLEM": {
-                model: "golem",
-                color: 0xaa5533,
-                calculateHealth: function(lvl) { return 20 + (lvl * 4); },
-                calculateAttack: function(lvl) { return 5 + Math.floor(lvl / 2); },
-                expValue: 10,
-                actions: [
-                    { type: "attack", text: "THE GOLEM SMASHES THE EARTH!", modifier: 1.2 },
-                    { type: "attack", text: "THE GOLEM SLAMS ITS HEAVY FISTS!", modifier: 1.0 }
-                ]
+                model: "golem", color: 0xaa5533,
+                hp: (lvl) => 25 + (lvl * 5), atk: (lvl) => 6 + Math.floor(lvl * 1.5), expValue: 12,
+                actions: [{ type: "attack", text: "THE GOLEM SMASHES!", mod: 1.2 }]
             },
             "VOID WRAITH": {
-                model: "wraith",
-                color: 0x33ffff,
-                calculateHealth: function(lvl) { return 15 + (lvl * 3); },
-                calculateAttack: function(lvl) { return 4 + Math.floor(lvl / 2); },
-                expValue: 8,
-                actions: [
-                    { type: "attack", text: "THE WRAITH SIPHONS YOUR SOUL!", modifier: 0.9 },
-                    { type: "heal", text: "THE WRAITH SHIFTS DENSITY TO REGENERATE!", value: 6 }
-                ]
-            },
-            "MAGMA DREDGE": {
-                model: "golem",
-                color: 0xff5500,
-                calculateHealth: function(lvl) { return 18 + (lvl * 5); },
-                calculateAttack: function(lvl) { return 6 + Math.floor(lvl / 2); },
-                expValue: 12,
-                actions: [
-                    { type: "attack", text: "THE DREDGE SPEWS MOLTEN SLAG!", modifier: 1.3 },
-                    { type: "attack", text: "HEAT FLARES SEAR YOUR ARMOR!", modifier: 0.9 }
-                ]
+                model: "wraith", color: 0x33ffff,
+                hp: (lvl) => 18 + (lvl * 3), atk: (lvl) => 5 + Math.floor(lvl * 1.5), expValue: 10,
+                actions: [{ type: "attack", text: "THE WRAITH SIPHONS!", mod: 1.0 }, { type: "heal", text: "WRAITH REGENERATES!", val: 8 }]
             },
             "PLAGUE STALKER": {
-                model: "wolf",
-                color: 0x75ff33,
-                calculateHealth: function(lvl) { return 14 + (lvl * 3); },
-                calculateAttack: function(lvl) { return 5 + Math.floor(lvl / 2); },
-                expValue: 9,
-                actions: [
-                    { type: "attack", text: "THE STALKER INFLICTS A TOXIC BITE!", modifier: 1.1 },
-                    { type: "heal", text: "THE STALKER FEEDS ON REANIMATED CELLS!", value: 8 }
-                ]
+                model: "wolf", color: 0x75ff33,
+                hp: (lvl) => 16 + (lvl * 4), atk: (lvl) => 5 + Math.floor(lvl * 1.5), expValue: 9,
+                actions: [{ type: "attack", text: "TOXIC BITE!", mod: 1.1 }]
             }
         };
-
 
         // ==========================================
         //  WEBGL GRAPHICS ENGINE
         // ==========================================
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x020205, 0.04);
-        
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -255,54 +222,42 @@
 
         scene.add(new THREE.AmbientLight(0x222233));
         const light = new THREE.PointLight(0xffffff, 2, 50);
-        light.position.set(0, 3, 5);
-        scene.add(light);
-        
-        
+        light.position.set(0, 3, 5); scene.add(light);
 
         const geometries = {
             room: new THREE.IcosahedronGeometry(1.8, 1),
             wolf: new THREE.TetrahedronGeometry(1.8, 0),
             golem: new THREE.BoxGeometry(2, 2, 2),
             wraith: new THREE.TorusKnotGeometry(1, 0.3, 64, 8),
-            treasure: new THREE.DodecahedronGeometry(1.3, 0),
-            fountain: new THREE.SphereGeometry(1.5, 16, 16),
-            merchant: new THREE.ConeGeometry(1.3, 2.5, 5)
+            chest: new THREE.DodecahedronGeometry(1.3, 0),
+            merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
+            scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
         };
 
         let activeEntities = [];
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-
+        
         const partGeo = new THREE.BufferGeometry();
-        const count = 400;
-        const arr = new Float32Array(count * 3);
-        for(let i=0; i<count*3; i++) arr[i] = (Math.random() - 0.5) * 25;
+        const arr = new Float32Array(400 * 3);
+        for(let i=0; i<1200; i++) arr[i] = (Math.random() - 0.5) * 25;
         partGeo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
         const partMesh = new THREE.Points(partGeo, new THREE.PointsMaterial({size: 0.06, color: 0x6666aa}));
         scene.add(partMesh);
-
         camera.position.set(0, 0, 7);
 
-        let mainTarget = null, leftChoice = null, rightChoice = null;
-        let shakeTimer = 0, globalTime = 0;
+        let mainTarget = null, leftChoice = null, rightChoice = null, shakeTimer = 0, globalTime = 0;
 
         function animate() {
             requestAnimationFrame(animate);
-            globalTime += 0.02;
-            partMesh.rotation.y += 0.0005;
+            globalTime += 0.02; partMesh.rotation.y += 0.0005;
 
             if (mainTarget) {
-                mainTarget.rotation.x += 0.01;
-                mainTarget.rotation.y += 0.015;
+                mainTarget.rotation.x += 0.01; mainTarget.rotation.y += 0.015;
                 mainTarget.position.y = Math.sin(globalTime * 2) * 0.15;
-                
-                if (shakeTimer > 0) {
-                    shakeTimer--;
-                    mainTarget.position.x = (Math.random() - 0.5) * 0.3;
-                } else { mainTarget.position.x = 0; }
+                if (shakeTimer > 0) { shakeTimer--; mainTarget.position.x = (Math.random() - 0.5) * 0.3; }
+                else mainTarget.position.x = 0;
             }
-
             if (leftChoice && rightChoice) {
                 leftChoice.rotation.y += 0.01; rightChoice.rotation.y += 0.01;
                 leftChoice.position.y = Math.sin(globalTime * 3) * 0.1;
@@ -313,353 +268,375 @@
         animate();
 
         function clearSceneObjects() {
-            if(mainTarget) scene.remove(mainTarget);
-            if(leftChoice) scene.remove(leftChoice);
-            if(rightChoice) scene.remove(rightChoice);
-            mainTarget = leftChoice = rightChoice = null;
-            activeEntities = [];
+            if(mainTarget) scene.remove(mainTarget); if(leftChoice) scene.remove(leftChoice); if(rightChoice) scene.remove(rightChoice);
+            mainTarget = leftChoice = rightChoice = null; activeEntities = [];
             document.getElementById('path-left').style.display = 'none';
             document.getElementById('path-right').style.display = 'none';
         }
 
-
         // ==========================================
-        //  CORE ENGINE RUNTIME LOGIC
+        //  UI & HUD LOGIC
         // ==========================================
-        let pHP = 30, pMaxHP = 30, gold = 20, depth = 0, pots = 2, scrolls = 1;
-        let pLevel = 1, pExp = 0, pExpNeeded = 10; // Experience Tracking Matrices
-        let activeEnemy = { blueprint: null, hp: 0, max: 0, atk: 0 };
-        let state = "START_SCREEN";
-        let currentLeftRoom = null, currentRightRoom = null;
-
         const UI = {
-            level: document.getElementById('lbl-level'),
-            exp: document.getElementById('lbl-exp'),
-            expNeeded: document.getElementById('lbl-exp-needed'),
-            depth: document.getElementById('lbl-depth'),
-            gold: document.getElementById('lbl-gold'),
-            pots: document.getElementById('lbl-pots'),
-            scrolls: document.getElementById('lbl-scrolls'),
-            pHpFill: document.getElementById('player-hp-fill'),
-            eHpFill: document.getElementById('enemy-hp-fill'),
-            eName: document.getElementById('enemy-name'),
-            eHud: document.getElementById('enemy-hud'),
-            prompt: document.getElementById('center-prompt'),
-            actions: document.getElementById('combat-actions'),
-            flash: document.getElementById('flash-overlay')
+            lvl: document.getElementById('lbl-level'), exp: document.getElementById('lbl-exp'), expNeed: document.getElementById('lbl-exp-needed'),
+            hpTxt: document.getElementById('lbl-hp'), mpTxt: document.getElementById('lbl-mp'),
+            hpFill: document.getElementById('player-hp-fill'), mpFill: document.getElementById('player-mp-fill'),
+            depth: document.getElementById('lbl-depth'), gold: document.getElementById('lbl-gold'),
+            wep: document.getElementById('lbl-wep'), arm: document.getElementById('lbl-arm'),
+            eName: document.getElementById('enemy-name'), eHud: document.getElementById('enemy-hud'), eHpFill: document.getElementById('enemy-hp-fill'),
+            prompt: document.getElementById('center-prompt'), actions: document.getElementById('combat-actions'), flash: document.getElementById('flash-overlay')
         };
 
-        window.addEventListener('click', onSceneClick);
-        function onSceneClick(e) {
-            if (state === "START_SCREEN") { startGame(); return; }
-            if (state === "GAME_OVER_SCREEN") { resetPlayerStatsToDefault(); startGame(); return; }
-            if (state !== "CHOOSE") return;
-
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            
-            const intersects = raycaster.intersectObjects(activeEntities);
-            if (intersects.length > 0) {
-                const sideSelected = intersects[0].object.name;
-                executePathSelection(sideSelected === "left" ? currentLeftRoom : currentRightRoom);
-            }
-        }
-
-        function triggerFlash(colorHex) {
-            UI.flash.style.background = colorHex;
-            setTimeout(() => UI.flash.style.background = "rgba(0,0,0,0)", 100);
-        }
+        function triggerFlash(colorHex) { UI.flash.style.background = colorHex; setTimeout(() => UI.flash.style.background = "rgba(0,0,0,0)", 100); }
 
         function updateHUD() {
-            UI.level.innerText = pLevel; UI.exp.innerText = pExp; UI.expNeeded.innerText = pExpNeeded;
-            UI.depth.innerText = depth; UI.gold.innerText = gold; UI.pots.innerText = pots; UI.scrolls.innerText = scrolls;
-            UI.pHpFill.style.width = `${(pHP/pMaxHP)*100}%`;
+            UI.lvl.innerText = pLevel; UI.exp.innerText = pExp; UI.expNeed.innerText = pExpNeeded;
+            UI.hpTxt.innerText = `${pHP}/${pMaxHP}`; UI.mpTxt.innerText = `${pMP}/${pMaxMP}`;
+            UI.hpFill.style.width = `${(pHP/pMaxHP)*100}%`; UI.mpFill.style.width = `${(pMP/pMaxMP)*100}%`;
+            UI.depth.innerText = depth; UI.gold.innerText = gold;
+            UI.wep.innerText = `${equipment.weapon.name} (+${equipment.weapon.atk})`;
+            UI.arm.innerText = `${equipment.armor.name} (+${equipment.armor.def})`;
+
             if(state === "BATTLE") {
                 UI.eHud.style.display = "block";
                 UI.eHpFill.style.width = `${(activeEnemy.hp/activeEnemy.max)*100}%`;
-            } else { UI.eHud.style.display = "none"; }
+            } else UI.eHud.style.display = "none";
         }
 
-        function getRandomRoomByWeight() {
-            let totalWeight = ROOM_POOL.reduce((sum, r) => sum + r.chance, 0);
-            let roll = Math.random() * totalWeight;
-            for (let r of ROOM_POOL) {
-                roll -= r.chance;
-                if (roll <= 0) return r;
+        // ==========================================
+        //  GAME LOOP / PATH SELECTION
+        // ==========================================
+        window.addEventListener('click', (e) => {
+            if (state === "START_SCREEN") { startGame(); return; }
+            if (state === "GAME_OVER_SCREEN") { resetPlayerStatsToDefault(); startGame(); return; }
+            if (state !== "CHOOSE") return; // Blocks choice raycasting during inventory management states
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(activeEntities);
+            if (intersects.length > 0) {
+                executePathSelection(intersects[0].object.name === "left" ? currentLeftRoom : currentRightRoom);
             }
-            return ROOM_POOL[0];
-        }
+        });
 
         function resetPlayerStatsToDefault() {
-            pHP = 30; pMaxHP = 30; gold = 20; depth = 0; pots = 2; scrolls = 1;
-            pLevel = 1; pExp = 0; pExpNeeded = 10;
+            pHP = 30; pMaxHP = 30; pMP = 10; pMaxMP = 10; pLevel = 1; pExp = 0; pExpNeeded = 10; gold = 20; depth = 0;
+            inventory = { hpPotions: 2, mpPotions: 1, weapons: [], armors: [] };
+            equipment = { weapon: { name: "RUSTY DAGGER", atk: 2 }, armor: { name: "CLOTH TUNIC", def: 1 } };
+            knownSpells = [ { id: "zap", name: "⚡ SPARK", cost: 3, baseDmg: 8, color: "rgba(255,255,0,0.4)" } ];
         }
 
         function startGame() { buildChoiceEnvironment(); }
 
         function buildChoiceEnvironment() {
-            state = "CHOOSE";
-            depth++;
-            clearSceneObjects();
-            updateHUD();
-
-            UI.prompt.innerText = "CHOOSE YOUR PATH";
-            UI.prompt.style.color = "#ffffff";
-            UI.actions.style.display = "none";
-
-            currentLeftRoom = getRandomRoomByWeight();
-            currentRightRoom = getRandomRoomByWeight();
-            while(currentRightRoom === currentLeftRoom) { currentRightRoom = getRandomRoomByWeight(); }
-
-            const labelL = document.getElementById('path-left');
-            const labelR = document.getElementById('path-right');
-            labelL.innerText = currentLeftRoom.name;
-            labelR.innerText = currentRightRoom.name;
+            state = "CHOOSE"; depth++; clearSceneObjects(); updateHUD();
+            UI.prompt.innerText = "CHOOSE YOUR PATH"; UI.prompt.style.color = "#ffffff";
             
-            labelL.style.borderColor = `#${currentLeftRoom.color.toString(16)}`;
-            labelL.style.color = `#${currentLeftRoom.color.toString(16)}`;
-            labelR.style.borderColor = `#${currentRightRoom.color.toString(16)}`;
-            labelR.style.color = `#${currentRightRoom.color.toString(16)}`;
-            
-            labelL.style.display = 'block'; labelR.style.display = 'block';
+            // Render exploration HUD with the Inventory screen trigger
+            UI.actions.style.display = "flex";
+            UI.actions.innerHTML = `<button class="btn-pot" onclick="renderExplorationInventory()">🎒 INVENTORY</button>`;
 
-            const matL = new THREE.MeshStandardMaterial({color: currentLeftRoom.color, wireframe: true});
-            leftChoice = new THREE.Mesh(geometries.room, matL);
-            leftChoice.position.set(-2.5, 0.3, 0); leftChoice.name = "left";
-            scene.add(leftChoice); activeEntities.push(leftChoice);
+            currentLeftRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
+            currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
+            while(currentRightRoom === currentLeftRoom) currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
 
-            const matR = new THREE.MeshStandardMaterial({color: currentRightRoom.color, wireframe: true});
-            rightChoice = new THREE.Mesh(geometries.room, matR);
-            rightChoice.position.set(2.5, 0.3, 0); rightChoice.name = "right";
-            scene.add(rightChoice); activeEntities.push(rightChoice);
+            const ll = document.getElementById('path-left'), lr = document.getElementById('path-right');
+            ll.innerText = currentLeftRoom.name; lr.innerText = currentRightRoom.name;
+            ll.style.borderColor = `#${currentLeftRoom.color.toString(16)}`; ll.style.color = `#${currentLeftRoom.color.toString(16)}`;
+            lr.style.borderColor = `#${currentRightRoom.color.toString(16)}`; lr.style.color = `#${currentRightRoom.color.toString(16)}`;
+            ll.style.display = 'block'; lr.style.display = 'block';
+
+            leftChoice = new THREE.Mesh(geometries.room, new THREE.MeshStandardMaterial({color: currentLeftRoom.color, wireframe: true}));
+            leftChoice.position.set(-2.5, 0.3, 0); leftChoice.name = "left"; scene.add(leftChoice); activeEntities.push(leftChoice);
+
+            rightChoice = new THREE.Mesh(geometries.room, new THREE.MeshStandardMaterial({color: currentRightRoom.color, wireframe: true}));
+            rightChoice.position.set(2.5, 0.3, 0); rightChoice.name = "right"; scene.add(rightChoice); activeEntities.push(rightChoice);
         }
 
-        function executePathSelection(selectedRoomBlueprint) {
-            state = "EVENT";
-            clearSceneObjects();
-            selectedRoomBlueprint.action();
+        function executePathSelection(room) {
+            state = "EVENT"; clearSceneObjects(); room.action();
         }
-
 
         // ==========================================
-        //  ENGINE API HELPERS
+        //  EXPLORATION INVENTORY INTERFACE
         // ==========================================
-
-        function giveGold(amount, textString) {
-            UI.prompt.innerHTML = `${textString}<br><span style='color:#ffd700'>+${amount} GOLD</span>`;
-            const mat = new THREE.MeshStandardMaterial({color: 0xffd700, roughness: 0.1});
-            mainTarget = new THREE.Mesh(geometries.treasure, mat);
-            scene.add(mainTarget);
-            gold += amount;
-            updateHUD();
-            triggerFlash("rgba(255,215,0,0.2)");
-            setNextActionTimeout();
-        }
-
-        function healPlayer(amount, textString) {
-            UI.prompt.innerHTML = `${textString}<br><span style='color:#33ff33'>+${amount} HP REGENERATED</span>`;
-            const mat = new THREE.MeshStandardMaterial({color: 0x33ff33, wireframe: true});
-            mainTarget = new THREE.Mesh(geometries.fountain, mat);
-            scene.add(mainTarget);
-            pHP = Math.min(pMaxHP, pHP + amount);
-            updateHUD();
-            triggerFlash("rgba(51,255,51,0.2)");
-            setNextActionTimeout();
-        }
-
-        function battleEnemy(enemyIdString) {
-            state = "BATTLE";
-            UI.actions.style.display = "flex";
-
-            const blueprint = ENEMY_REGISTRY[enemyIdString];
-            activeEnemy.blueprint = blueprint;
-            activeEnemy.max = blueprint.calculateHealth(depth);
-            activeEnemy.hp = activeEnemy.max;
-            activeEnemy.atk = blueprint.calculateAttack(depth);
-
-            UI.prompt.innerText = `${enemyIdString} ENGAGED!`;
-            UI.prompt.style.color = "#ff3333";
-            UI.eName.innerText = enemyIdString;
-
-            const mat = new THREE.MeshStandardMaterial({color: blueprint.color, roughness: 0.5});
-            mainTarget = new THREE.Mesh(geometries[blueprint.model], mat);
-            scene.add(mainTarget);
+        function renderExplorationInventory() {
+            state = "INVENTORY_MENU"; // Temporarily locks out-of-combat room raycasting
+            document.getElementById('path-left').style.display = 'none';
+            document.getElementById('path-right').style.display = 'none';
             
-            updateHUD();
-        }
-
-        function openShop() {
-            state = "SHOP";
-            UI.prompt.innerText = "WELCOME TRADER... CHOOSE RESOURCE";
-            UI.prompt.style.color = "#ffd700";
+            UI.prompt.innerText = "EQUIPMENT MANAGEMENT";
             
-            const mat = new THREE.MeshStandardMaterial({color: 0xffaa00, roughness: 0.4});
-            mainTarget = new THREE.Mesh(geometries.merchant, mat);
-            scene.add(mainTarget);
-
-            UI.actions.style.display = "flex";
-            UI.actions.innerHTML = `
-                <button class="btn-pot" onclick="buyItem('potion', 15)">🧪 POTION (15G)</button>
-                <button class="btn-spl" onclick="buyItem('scroll', 25)">🔮 SCROLL (25G)</button>
-                <button class="btn-def" onclick="exitShop()">🚪 LEAVE</button>
-            `;
+            let html = `<div style="width:100%; text-align:center; color:#ff5555; font-size:0.9rem; margin-bottom:5px;">--- WEAPONS BAG ---</div>`;
+            if (inventory.weapons.length === 0) {
+                html += `<p style="font-size:0.8rem; color:#666; width:100%; text-align:center;">No stored weapons</p>`;
+            }
+            inventory.weapons.forEach((w, index) => {
+                html += `<button class="btn-atk" onclick="equipItemFromBag('weapon', ${index})">${w.name} (+${w.atk} ATK)</button>`;
+            });
+            
+            html += `<div style="width:100%; text-align:center; color:#aaaaaa; font-size:0.9rem; margin:15px 0 5px 0;">--- ARMORS BAG ---</div>`;
+            if (inventory.armors.length === 0) {
+                html += `<p style="font-size:0.8rem; color:#666; width:100%; text-align:center;">No stored armor</p>`;
+            }
+            inventory.armors.forEach((a, index) => {
+                html += `<button class="btn-def" onclick="equipItemFromBag('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
+            });
+            html += `<div style="width:100%; text-align:center; color:#ff5555; font-size:0.9rem; margin-bottom:5px;">--- WEAPONS BAG ---</div>`;
+            html += `<button class="btn-pot" onclick="useItem('hp')">❤️ HP POTION (${inventory.hpPotions})</button>`;
+            html += `<button class="btn-spl" onclick="useItem('mp')">🧪 MP POTION (${inventory.mpPotions})</button>`;
+            html += `<div style="width:100%; margin-top:20px; text-align:center;"><button class="btn-back" onclick="exitExplorationInventory()">↩ CLOSE</button></div>`;
+            UI.actions.innerHTML = html;
         }
 
-        function buyItem(item, cost) {
-            if (gold >= cost) {
-                gold -= cost;
-                if (item === 'potion') pots++;
-                if (item === 'scroll') scrolls++;
-                UI.prompt.innerText = `PURCHASED ${item.toUpperCase()}!`;
-                triggerFlash("rgba(255,215,0,0.15)");
+        function equipItemFromBag(type, index) {
+            if (type === 'weapon') {
+                const standardOldWeapon = equipment.weapon;
+                equipment.weapon = inventory.weapons[index];
+                inventory.weapons.splice(index, 1);
+                if (standardOldWeapon) inventory.weapons.push(standardOldWeapon);
             } else {
-                UI.prompt.innerText = "NOT ENOUGH GOLD!";
-                triggerFlash("rgba(255,0,0,0.15)");
+                const standardOldArmor = equipment.armor;
+                equipment.armor = inventory.armors[index];
+                inventory.armors.splice(index, 1);
+                if (standardOldArmor) inventory.armors.push(standardOldArmor);
             }
             updateHUD();
-            setTimeout(() => { if(state === "SHOP") UI.prompt.innerText = "ANYTHING ELSE?"; }, 1000);
+            renderExplorationInventory(); // Live-reloads loadout allocations on selection
         }
 
-        function exitShop() {
-            UI.actions.innerHTML = `
-                <button class="btn-atk" onclick="handleAction('attack')">⚔️ ATTACK</button>
-                <button class="btn-def" onclick="combatAction('defend')">🛡️ DEFEND</button>
-                <button class="btn-pot" onclick="combatAction('heal')">🧪 POTION</button>
-                <button class="btn-spl" onclick="combatAction('spell')">🔮 SPELL</button>
-            `;
-            UI.actions.style.display = "none";
-            setNextActionTimeout();
+        function exitExplorationInventory() {
+            state = "CHOOSE";
+            UI.prompt.innerText = "CHOOSE YOUR PATH";
+            document.getElementById('path-left').style.display = 'block';
+            document.getElementById('path-right').style.display = 'block';
+            UI.actions.innerHTML = `<button class="btn-pot" onclick="renderExplorationInventory()">🎒 INVENTORY</button>`;
         }
-
-        function setNextActionTimeout() {
-            setTimeout(() => { buildChoiceEnvironment(); }, 2000);
-        }
-
 
         // ==========================================
-        //  COMBAT ENGINE
+        //  LOOT & EVENTS
         // ==========================================
-        function handleAction(act) { if (state === "BATTLE") combatAction(act); }
-
-        function combatAction(type) {
-            let pDefending = false;
-
-            if (type === 'attack') {
-                // Player base damage scales dynamically with level (+3 per Level)
-                const baseAtk = 5 + (pLevel * 3);
-                const dmg = baseAtk + Math.floor(Math.random() * 6);
-                activeEnemy.hp -= dmg;
-                UI.prompt.innerText = `YOU STRUCK FOR -${dmg}`;
-                executeVisualHit();
-            }
-            else if (type === 'spell') {
-                if (scrolls > 0) {
-                    scrolls--;
-                    // Spell bursts scale directly off player level thresholds
-                    const baseSpell = 15 + (pLevel * 5);
-                    const dmg = baseSpell + Math.floor(Math.random() * 10);
-                    activeEnemy.hp -= dmg;
-                    UI.prompt.innerText = `🔮 MAGIC BURST DEALS -${dmg}!`;
-                    triggerFlash("rgba(224, 102, 255, 0.4)");
-                    executeVisualHit();
-                } else {
-                    UI.prompt.innerText = "NO SCROLLS IN INVENTORY!";
-                    return;
-                }
-            }
-            else if (type === 'defend') { pDefending = true; UI.prompt.innerText = "GUARD RAISED"; }
-            else if (type === 'heal') {
-                if (pots > 0) {
-                    pots--; pHP = Math.min(pMaxHP, pHP + 15);
-                    UI.prompt.innerText = "+15 HP RECOVERED";
-                    triggerFlash("rgba(51,255,51,0.15)");
-                } else { UI.prompt.innerText = "OUT OF POTIONS!"; return; }
-            }
-
-            updateHUD();
-
-            if (activeEnemy.hp <= 0) { executeVictory(); return; }
-
-            UI.actions.style.pointerEvents = "none";
+        function grantEquipment() {
+            const isWeapon = Math.random() > 0.5;
+            const pool = isWeapon ? EQUIPMENT_REGISTRY.weapons : EQUIPMENT_REGISTRY.armors;
+            const blueprint = pool[Math.floor(Math.random() * pool.length)];
+            const scaling = Math.floor(depth * 1.5) + Math.floor(Math.random() * 3);
             
+            if (isWeapon) {
+                const finalAtk = blueprint.baseAtk + scaling;
+                inventory.weapons.push({ name: blueprint.name, atk: finalAtk });
+                UI.prompt.innerHTML = `FOUND AN ITEM!<br><span style='color:#55ff55'>ADDED TO BAG: ${blueprint.name} (+${finalAtk} ATK)</span>`;
+            } else {
+                const finalDef = blueprint.baseDef + scaling;
+                inventory.armors.push({ name: blueprint.name, def: finalDef });
+                UI.prompt.innerHTML = `FOUND AN ITEM!<br><span style='color:#55ff55'>ADDED TO BAG: ${blueprint.name} (+${finalDef} DEF)</span>`;
+            }
+
+            mainTarget = new THREE.Mesh(geometries.chest, new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
+            scene.add(mainTarget);
+            triggerFlash("rgba(255,255,255,0.2)"); updateHUD();
+            setTimeout(buildChoiceEnvironment, 2500);
+        }
+
+        function grantSpellScroll() {
+            const unknownSpells = ALL_SPELLS.filter(s => !knownSpells.find(ks => ks.id === s.id));
+            if (unknownSpells.length === 0) {
+                inventory.mpPotions += 2;
+                UI.prompt.innerHTML = "YOU ALREADY KNOW ALL MAGIC.<br><span style='color:#4488ff'>FOUND 2 MP POTIONS INSTEAD.</span>";
+            } else {
+                const spell = unknownSpells[Math.floor(Math.random() * unknownSpells.length)];
+                knownSpells.push(spell);
+                UI.prompt.innerHTML = `YOU READ AN ANCIENT SCROLL!<br><span style='color:#aa55ff'>LEARNED SPELL: ${spell.name}</span>`;
+            }
+            mainTarget = new THREE.Mesh(geometries.scroll, new THREE.MeshStandardMaterial({color: 0xe066ff})); scene.add(mainTarget);
+            triggerFlash("rgba(224,102,255,0.2)"); updateHUD();
+            setTimeout(buildChoiceEnvironment, 2500);
+        }
+
+        function healPlayer(amount, text) {
+            pHP = Math.min(pMaxHP, pHP + amount);
+            pMP = Math.min(pMaxMP, pMP + Math.floor(amount/2));
+            UI.prompt.innerHTML = `${text}<br><span style='color:#55ff55'>RESTORED HP & MP</span>`;
+            triggerFlash("rgba(85,255,85,0.2)"); updateHUD();
+            setTimeout(buildChoiceEnvironment, 2000);
+        }
+
+        // ==========================================
+        //  COMBAT & MENU RENDERERS
+        // ==========================================
+        function battleEnemy(enemyId) {
+            state = "BATTLE";
+            const bp = ENEMY_REGISTRY[enemyId];
+            activeEnemy = { blueprint: bp, max: bp.hp(depth), hp: bp.hp(depth), atk: bp.atk(depth) };
+
+            UI.prompt.innerText = `${enemyId} ENGAGED!`; UI.prompt.style.color = "#ff3333"; UI.eName.innerText = enemyId;
+            mainTarget = new THREE.Mesh(geometries[bp.model], new THREE.MeshStandardMaterial({color: bp.color, roughness: 0.5})); scene.add(mainTarget);
+            
+            updateHUD(); renderMainMenu();
+        }
+
+        function renderMainMenu() {
+            UI.actions.style.display = "flex";
+            UI.actions.innerHTML = `
+                <button class="btn-atk" onclick="execMelee()">⚔️ ATTACK</button>
+                <button class="btn-spl" onclick="renderMagicMenu()">🔮 MAGIC</button>
+                <button class="btn-pot" onclick="renderItemMenu()">🎒 ITEMS</button>
+                <button class="btn-def" onclick="execDefend()">🛡️ DEFEND</button>
+            `;
+        }
+
+        function renderMagicMenu() {
+            UI.actions.innerHTML = knownSpells.map((s, i) =>
+                `<button class="btn-spl" onclick="execMagic(${i})">${s.name} (${s.cost} MP)</button>`
+            ).join('') + `<button class="btn-back" onclick="renderMainMenu()">↩ BACK</button>`;
+        }
+
+        function renderItemMenu() {
+            UI.actions.innerHTML = `
+                <button class="btn-pot" onclick="useItem('hp')">❤️ HP POTION (${inventory.hpPotions})</button>
+                <button class="btn-spl" onclick="useItem('mp')">🧪 MP POTION (${inventory.mpPotions})</button>
+                <button class="btn-back" onclick="renderMainMenu()">↩ BACK</button>
+            `;
+        }
+
+        // ==========================================
+        //  PLAYER ACTIONS
+        // ==========================================
+        let pDefending = false;
+
+        function execMelee() {
+            const dmg = Math.floor(Math.random() * 4) + equipment.weapon.atk + (pLevel * 2);
+            activeEnemy.hp -= dmg;
+            UI.prompt.innerText = `STRUCK WITH ${equipment.weapon.name} FOR -${dmg}`;
+            executeVisualHit(); advanceTurn();
+        }
+
+        function execMagic(spellIndex) {
+            const spell = knownSpells[spellIndex];
+            if (pMP < spell.cost) { UI.prompt.innerText = "NOT ENOUGH MP!"; return; }
+            
+            pMP -= spell.cost;
+            const dmg = spell.baseDmg + (pLevel * 3);
+            activeEnemy.hp -= dmg;
+            
+            let txt = `CAST ${spell.name} FOR -${dmg}!`;
+            if (spell.heals) {
+                pHP = Math.min(pMaxHP, pHP + spell.heals);
+                txt += `\nHEALED +${spell.heals} HP!`;
+            }
+            
+            UI.prompt.innerText = txt;
+            triggerFlash(spell.color); executeVisualHit(); advanceTurn();
+        }
+
+        function useItem(type) {
+            if (type === 'hp' && inventory.hpPotions > 0) {
+                inventory.hpPotions--; pHP = Math.min(pMaxHP, pHP + 20);
+                UI.prompt.innerText = "DRANK HP POTION (+20 HP)";
+                triggerFlash("rgba(85,255,85,0.2)");
+                if (state == "BATTLE") { advanceTurn()};
+            } else if (type === 'mp' && inventory.mpPotions > 0) {
+                inventory.mpPotions--; pMP = Math.min(pMaxMP, pMP + 15);
+                UI.prompt.innerText = "DRANK MP POTION (+15 MP)";
+                triggerFlash("rgba(68,136,255,0.2)");
+                if (state == "BATTLE") { advanceTurn()};
+            } else {
+                UI.prompt.innerText = "OUT OF POTIONS!";
+            }
+        }
+
+        function execDefend() {
+            pDefending = true; UI.prompt.innerText = "GUARD RAISED (DMG REDUCED)"; advanceTurn();
+        }
+
+        function advanceTurn() {
+            updateHUD(); renderMainMenu(); UI.actions.style.pointerEvents = "none";
+            if (activeEnemy.hp <= 0) { setTimeout(executeVictory, 800); return; }
+
             setTimeout(() => {
                 if(state !== "BATTLE") return;
-                
-                const aiPool = activeEnemy.blueprint.actions;
-                const aiSelection = aiPool[Math.floor(Math.random() * aiPool.length)];
-
-                if(aiSelection.type === "attack") {
-                    let finalDmg = Math.floor((Math.random() * 3 + activeEnemy.atk) * aiSelection.modifier);
-                    if(pDefending) finalDmg = Math.max(1, Math.floor(finalDmg / 3));
+                const ai = activeEnemy.blueprint.actions[Math.floor(Math.random() * activeEnemy.blueprint.actions.length)];
+                if (ai.type === "attack") {
+                    let rawDmg = Math.floor((Math.random() * 4 + activeEnemy.atk) * ai.mod);
+                    let finalDmg = Math.max(1, rawDmg - equipment.armor.def);
+                    if (pDefending) finalDmg = Math.max(0, Math.floor(finalDmg / 2));
                     pHP -= finalDmg;
-                    UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${aiSelection.text}</span><br>-${finalDmg} HP RECEIVED`;
+                    UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${ai.text}</span><br>-${finalDmg} HP`;
                     triggerFlash("rgba(255,0,0,0.3)");
+                } else if (ai.type === "heal") {
+                    activeEnemy.hp = Math.min(activeEnemy.max, activeEnemy.hp + ai.val);
+                    UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#44ff44'>${ai.text}</span><br>+${ai.val} HP`;
                 }
-                else if(aiSelection.type === "heal") {
-                    activeEnemy.hp = Math.min(activeEnemy.max, activeEnemy.hp + aiSelection.value);
-                    UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#44ff44'>${aiSelection.text}</span><br>+${aiSelection.value} FOE HP REGEN`;
-                }
-
-                updateHUD();
-
-                if (pHP <= 0) { executeGameOver(); }
-                else { UI.actions.style.pointerEvents = "auto"; }
+                
+                pDefending = false; updateHUD();
+                if (pHP <= 0) executeGameOver(); else UI.actions.style.pointerEvents = "auto";
             }, 1200);
         }
 
         function executeVisualHit() {
-            shakeTimer = 15;
-            if(mainTarget) mainTarget.material.color.setHex(0xffffff);
-            setTimeout(() => { if(mainTarget) mainTarget.material.color.setHex(activeEnemy.blueprint.color); }, 100);
+            shakeTimer = 15; mainTarget.material.color.setHex(0xffffff);
+            setTimeout(() => { if(mainTarget && activeEnemy.hp > 0) mainTarget.material.color.setHex(activeEnemy.blueprint.color); }, 100);
         }
 
         function executeVictory() {
-            state = "EVENT";
-            UI.actions.style.display = "none"; UI.actions.style.pointerEvents = "auto";
+            state = "EVENT"; UI.actions.style.display = "none"; UI.actions.style.pointerEvents = "auto";
             if(mainTarget) mainTarget.material.wireframe = true;
+            
+            const expGained = activeEnemy.blueprint.expValue;
+            pExp += expGained; gold += 10 + depth * 2;
 
-            const gainedExp = activeEnemy.blueprint.expValue;
-            pExp += gainedExp;
-            gold += 10 + depth * 2;
-
-            let levelUpOccurred = false;
-            // Handle multiple level up jumps if excessive experience overflows requirements
-            while (pExp >= pExpNeeded) {
-                pExp -= pExpNeeded;
-                pLevel++;
-                pExpNeeded = Math.floor(pExpNeeded * 1.5); // Escalating requirement formula
-                pMaxHP += 10; // Gain max health
-                pHP = pMaxHP; // Full heal bonus award
-                levelUpOccurred = true;
-            }
-
-            if(levelUpOccurred) {
-                UI.prompt.innerHTML = `FOE SHATTERED! LEVEL UP!<br><span style='color:#33aaff'>REACHED LEVEL ${pLevel} (+MAX HP/DMG)</span>`;
-                UI.prompt.style.color = "#33aaff";
+            if (pExp >= pExpNeeded) {
+                while (pExp >= pExpNeeded) { pExp -= pExpNeeded; pLevel++; pExpNeeded = Math.floor(pExpNeeded * 1.5); pMaxHP += 5; pMaxMP += 3; }
+                pHP = pMaxHP; pMP = pMaxMP;
+                UI.prompt.innerHTML = `VICTORY! LEVEL UP!<br><span style='color:#33aaff'>REACHED LEVEL ${pLevel}</span>`;
                 triggerFlash("rgba(51,170,255,0.4)");
             } else {
-                UI.prompt.innerHTML = `FOE SHATTERED<br><span style='color:#33aaff'>+${gainedExp} EXP GAINED</span>`;
-                UI.prompt.style.color = "#33ffff";
+                UI.prompt.innerHTML = `FOE DEFEATED<br><span style='color:#33aaff'>+${expGained} EXP</span>`;
             }
-
-            updateHUD();
-            setNextActionTimeout();
+            updateHUD(); setTimeout(buildChoiceEnvironment, 2000);
         }
 
         function executeGameOver() {
-            state = "GAME_OVER_SCREEN";
-            UI.actions.style.display = "none"; UI.actions.style.pointerEvents = "auto";
-            UI.prompt.innerText = `DIED AT DEPTH ${depth}. CLICK TO RESTART.`;
-            UI.prompt.style.color = "#ff0000";
+            state = "GAME_OVER_SCREEN"; UI.actions.style.display = "none"; UI.actions.style.pointerEvents = "auto";
+            UI.prompt.innerText = `YOU DIED AT DEPTH ${depth}.\nCLICK TO RESTART.`; UI.prompt.style.color = "#ff0000";
             if(mainTarget) mainTarget.material.color.setHex(0x222222);
         }
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        // ==========================================
+        //  SHOP LOGIC
+        // ==========================================
+        function openShop() {
+            state = "SHOP"; UI.prompt.innerText = "MERCHANT: 'WHAT DO YOU NEED?'"; UI.prompt.style.color = "#ffd700";
+            mainTarget = new THREE.Mesh(geometries.merchant, new THREE.MeshStandardMaterial({color: 0xffaa00, roughness: 0.4})); scene.add(mainTarget);
+
+            UI.actions.style.display = "flex";
+            UI.actions.innerHTML = `
+                <button class="btn-pot" onclick="buyShopItem('hp', 15)">❤️ HP POT (15G)</button>
+                <button class="btn-spl" onclick="buyShopItem('mp', 15)">🧪 MP POT (15G)</button>
+                <button class="btn-atk" onclick="buyShopItem('wep', 40)">⚔️ WEAPON (40G)</button>
+                <button class="btn-back" onclick="exitShop()">🚪 LEAVE</button>
+            `;
+        }
+
+        function buyShopItem(item, cost) {
+            if (gold >= cost) {
+                gold -= cost;
+                if (item === 'hp') { inventory.hpPotions++; UI.prompt.innerText = "BOUGHT HP POTION!"; }
+                if (item === 'mp') { inventory.mpPotions++; UI.prompt.innerText = "BOUGHT MP POTION!"; }
+                if (item === 'wep') {
+                    const wepBlueprint = EQUIPMENT_REGISTRY.weapons[Math.floor(Math.random() * EQUIPMENT_REGISTRY.weapons.length)];
+                    const power = wepBlueprint.baseAtk + Math.floor(depth * 1.8) + 2;
+                    inventory.weapons.push({ name: `MASTERWORK ${wepBlueprint.name}`, atk: power });
+                    UI.prompt.innerText = `BOUGHT MASTERWORK ${wepBlueprint.name}! (Sent to bag)`;
+                }
+                triggerFlash("rgba(255,215,0,0.15)"); updateHUD();
+            } else {
+                UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");
+            }
+        }
+        function exitShop() { UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000); }
+
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
 </body>
 </html>
