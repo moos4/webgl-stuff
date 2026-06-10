@@ -1,8 +1,7 @@
 this is just a part of my main website at [this link](https://moos4.github.io) and [this repo](https://github.com/moos4/moos4.github.io/)
 
 ## want to add stuff to the rogue-like?
-do this:
-1 make the code for it using this base:
+1. make the code for it using this base:
 ``` 
 const ALL_SPELLS = [
     { id: "fireball", name: "🔥 FIREBALL", cost: 6, baseDmg: 18, color: "rgba(255,68,0,0.4)" },
@@ -93,6 +92,6 @@ const geometries = {
     scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
 };
 ```
-2 then put that code in an issue
-3 I'll revieuw it and might add it in
-4 SUCCESS
+2. then put that code in an issue
+3. I'll revieuw it and might add it in
+4. SUCCESS
