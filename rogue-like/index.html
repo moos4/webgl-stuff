@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modular 3D WebGL Roguelike - RPG Inventory Edition</title>
+    <title>ROGUELIKE RPG - sell items</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Arial Black', Gadget, sans-serif; user-select: none; color: #fff; }
         #webgl-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
@@ -636,11 +636,39 @@
 
             UI.actions.style.display = "flex";
             UI.actions.innerHTML = `
+              <button class="btn-pot" onclick="buyShop()">BUY</button>
+              <button class="btn-atk" onclick="sellShop()">SELL</button>
+              <button class="btn-back" onclick="exitShop()">🚪 LEAVE</button>
+            `;
+        }
+        
+        function buyShop() {
+            UI.prompt.innerText = "MERCHANT: 'WHAT DO YOU WANT TO BUY?'";
+            UI.actions.innerHTML = `
                 <button class="btn-pot" onclick="buyShopItem('hp', 15)">❤️ HP POT (15G)</button>
                 <button class="btn-spl" onclick="buyShopItem('mp', 15)">🧪 MP POT (15G)</button>
                 <button class="btn-atk" onclick="buyShopItem('wep', 40)">⚔️ WEAPON (40G)</button>
-                <button class="btn-back" onclick="exitShop()">🚪 LEAVE</button>
+                <button class="btn-back" onclick="clearSceneObjects(); openShop()">↩ BACK</button>
             `;
+        }
+        function sellShop() {
+          UI.prompt.innerText = "MERCHANT: 'WHAT DO YOU WANT TO SELL?'";
+          let html = `<div style="width:100%; text-align:center; color:#ff5555; font-size:0.9rem; margin-bottom:5px;">--- WEAPONS BAG ---</div>`;
+          if (inventory.weapons.length === 0) {
+              html += `<p style="font-size:0.8rem; color:#666; width:100%; text-align:center;">No stored weapons</p>`;
+          }
+          inventory.weapons.forEach((w, index) => {
+              html += `<button class="btn-atk" onclick="sellShopItem('weapon', ${index})">${w.name} (+${w.atk} ATK)</button>`;
+          });
+          html += `<div style="width:100%; text-align:center; color:#aaaaaa; font-size:0.9rem; margin:15px 0 5px 0;">--- ARMORS BAG ---</div>`;
+          if (inventory.armors.length === 0) {
+              html += `<p style="font-size:0.8rem; color:#666; width:100%; text-align:center;">No stored armor</p>`;
+          }
+          inventory.armors.forEach((a, index) => {
+              html += `<button class="btn-def" onclick="equipItemFromBag('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
+          });
+          html += `<button class="btn-back" onclick="clearSceneObjects(); openShop()">↩ BACK</button>`;
+          UI.actions.innerHTML = html;
         }
 
         function buyShopItem(item, cost) {
@@ -659,6 +687,25 @@
                 UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");
             }
         }
+        
+        function sellShopItem(type, index) {
+            if (type === 'weapon') {
+                const price = Math.floor(inventory.weapons[index]["atk"]*0.75);
+                inventory.weapons.splice(index, 1);
+                gold += price;
+                updateHUD()
+                clearSceneObjects();
+                sellShop();
+            } else {
+                const price = Math.floor(inventory.armor[index]["def"]*0.75);
+                inventory.armor.splice(index, 1);
+                gold += price;
+                updateHUD()
+                clearSceneObjects();
+                sellShop();
+            }
+        }
+        
         function exitShop() { UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000); }
 
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
