@@ -61,6 +61,7 @@
         #flash-overlay { position: absolute; top:0; left:0; width:100vw; height:100vh; z-index: 5; pointer-events: none; background: rgba(255,0,0,0); transition: background 0.1s;}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
 </head>
 <body>
 
@@ -98,7 +99,6 @@
 
         <div id="combat-actions"></div>
     </div>
-
     <script>
         // ==========================================
         //  GLOBAL STATE & INVENTORY
@@ -233,6 +233,30 @@
             merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
             scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
         };
+        
+        const objLoader = new THREE.OBJLoader();
+        function loadCustomGeometry(key, filePath) {
+            objLoader.load(
+                filePath,
+                (obj) => {
+                    // An OBJ file imports as a Group. We traverse it to find the Mesh data.
+                    obj.traverse((child) => {
+                        if (child.isMesh) {
+                            // Scale/normalize geometry size here if your custom models are massive
+                            child.geometry.center();
+                            
+                            // Inject the custom geometry into our global registry
+                            geometries[key] = child.geometry;
+                            console.log(`Successfully loaded 3D asset for: ${key}`);
+                        }
+                    });
+                },
+                (xhr) => { /* Optional: Progress tracking */ },
+                (error) => { console.error(`Error loading 3D asset (${filePath}):`, error); }
+            );
+        }
+        
+        loadCustomGeometry("room", "assets/Yoshi.obj");
 
         let activeEntities = [];
         const raycaster = new THREE.Raycaster();
@@ -521,7 +545,7 @@
             
             let txt = `CAST ${spell.name} FOR -${dmg}!`;
             if (spell.heals) {
-                pHP = Math.min(pMaxHP, pHP + spell.heals);
+                pHP = Math.min(pMaxHP, pHP + spell.heals + (pLevel * 2));
                 txt += `\nHEALED +${spell.heals} HP!`;
             }
             
