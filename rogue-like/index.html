@@ -224,16 +224,6 @@
         const light = new THREE.PointLight(0xffffff, 2, 50);
         light.position.set(0, 3, 5); scene.add(light);
 
-        const geometries = {
-            room: new THREE.IcosahedronGeometry(1.8, 1),
-            wolf: new THREE.TetrahedronGeometry(1.8, 0),
-            golem: new THREE.BoxGeometry(2, 2, 2),
-            wraith: new THREE.TorusKnotGeometry(1, 0.3, 64, 8),
-            chest: new THREE.DodecahedronGeometry(1.3, 0),
-            merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
-            scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
-        };
-        
         const objLoader = new THREE.OBJLoader();
         function loadCustomGeometry(key, filePath) {
             objLoader.load(
@@ -255,8 +245,17 @@
                 (error) => { console.error(`Error loading 3D asset (${filePath}):`, error); }
             );
         }
+
+        const geometries = {
+            room: new THREE.IcosahedronGeometry(1.8, 1),
+            wolf: new THREE.TetrahedronGeometry(1.8, 0),
+            golem: new THREE.BoxGeometry(2, 2, 2),
+            wraith: new THREE.TorusKnotGeometry(1, 0.3, 64, 8),
+            chest: new THREE.DodecahedronGeometry(1.3, 0),
+            merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
+            scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
+        };
         
-        loadCustomGeometry("room", "assets/Yoshi.obj");
 
         let activeEntities = [];
         const raycaster = new THREE.Raycaster();

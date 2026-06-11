@@ -58,39 +58,27 @@ const ROOM_POOL = [
         }
     }
 ];
-
+/*
+funcs:
+battleEnemy("name")
+healPlayer(amount: int, "text")
+grantEquipment()
+openShop()
+grantSpellScroll()
+*/
 const ENEMY_REGISTRY = {
     "SABER WOLF": {
         model: "wolf", color: 0xff3333,
         hp: (lvl) => 15 + (lvl * 4), atk: (lvl) => 4 + Math.floor(lvl * 1.5), expValue: 6,
         actions: [{ type: "attack", text: "THE WOLF BITES!", mod: 1.0 }]
-    },
-    "IRON GOLEM": {
-        model: "golem", color: 0xaa5533,
-        hp: (lvl) => 25 + (lvl * 5), atk: (lvl) => 6 + Math.floor(lvl * 1.5), expValue: 12,
-        actions: [{ type: "attack", text: "THE GOLEM SMASHES!", mod: 1.2 }]
-    },
-    "VOID WRAITH": {
-        model: "wraith", color: 0x33ffff,
-        hp: (lvl) => 18 + (lvl * 3), atk: (lvl) => 5 + Math.floor(lvl * 1.5), expValue: 10,
-        actions: [{ type: "attack", text: "THE WRAITH SIPHONS!", mod: 1.0 }, { type: "heal", text: "WRAITH REGENERATES!", val: 8 }]
-    },
-    "PLAGUE STALKER": {
-        model: "wolf", color: 0x75ff33,
-        hp: (lvl) => 16 + (lvl * 4), atk: (lvl) => 5 + Math.floor(lvl * 1.5), expValue: 9,
-        actions: [{ type: "attack", text: "TOXIC BITE!", mod: 1.1 }]
     }
 };
 
 const geometries = {
-    room: new THREE.IcosahedronGeometry(1.8, 1),
-    wolf: new THREE.TetrahedronGeometry(1.8, 0),
-    golem: new THREE.BoxGeometry(2, 2, 2),
-    wraith: new THREE.TorusKnotGeometry(1, 0.3, 64, 8),
-    chest: new THREE.DodecahedronGeometry(1.3, 0),
-    merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
-    scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
+    name: new THREE.IcosahedronGeometry(1.8, 1) //a three js geometry ALSO DO THIS IF YOU USE AN OBJ, used for fallback
 };
+
+loadCustomGeometry("name", "assets/path");
 ```
 2. then put that code in an issue (if you add new enemies and want new geometries, look [here.](https://threejs.org/docs/#BoxGeometry))
 3. I'll review it and might add it in
