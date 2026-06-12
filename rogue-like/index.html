@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROGUELIKE RPG - sell items</title>
+    <title>Modular 3D WebGL Roguelike - BIG ASS UPDATE</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Arial Black', Gadget, sans-serif; user-select: none; color: #fff; }
         #webgl-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
@@ -16,7 +16,7 @@
         .stat-box { background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; border: 1px solid #444; min-width: 250px; }
         
         .bar-container { width: 100%; height: 15px; background: #222; border: 1px solid #666; margin-top: 5px; overflow: hidden; position: relative;}
-        #player-hp-fill { width: 100%; height: 100%; background: #ff4444; transition: width 0.2s; }
+        #player-hp-fill { width: 100%; height: 100%; background: #ff4444; transition: width 0.2s     ; }
         #player-mp-fill { width: 100%; height: 100%; background: #4488ff; transition: width 0.2s; }
         
         .equipment-text { font-size: 0.85rem; color: #aaa; margin-top: 8px; border-top: 1px solid #444; padding-top: 5px; }
@@ -116,7 +116,7 @@
         };
 
         let equipment = {
-            weapon: { name: "RUSTY DAGGER", atk: 2 },
+            weapon: { name: "RUSTY DAGGER", atk: 4 },
             armor:  { name: "CLOTH TUNIC", def: 1 }
         };
 
@@ -161,7 +161,9 @@
                 action: function() {
                     if (Math.random() < 0.6) battleEnemy("IRON GOLEM");
                     else grantEquipment();
-                }
+                },
+                minDepth: 0,
+                forceDepth: 5
             },
             {
                 name: "Fae Glade Ruins", chance: 20, color: 0x33ff99,
@@ -184,6 +186,10 @@
                     if (Math.random() < 0.3) battleEnemy("VOID WRAITH");
                     else grantSpellScroll();
                 }
+            },
+            {
+                name: "Tavern", chance: 69, color: 0x00fbff,
+                action: function() { openTavern(); }
             }
         ];
 
@@ -191,12 +197,14 @@
             "SABER WOLF": {
                 model: "wolf", color: 0xff3333,
                 hp: (lvl) => 15 + (lvl * 4), atk: (lvl) => 4 + Math.floor(lvl * 1.5), expValue: 6,
-                actions: [{ type: "attack", text: "THE WOLF BITES!", mod: 1.0 }]
+                actions: [{ type: "attack", text: "THE WOLF BITES!", mod: 1.0 }],
             },
             "IRON GOLEM": {
                 model: "golem", color: 0xaa5533,
                 hp: (lvl) => 25 + (lvl * 5), atk: (lvl) => 6 + Math.floor(lvl * 1.5), expValue: 12,
-                actions: [{ type: "attack", text: "THE GOLEM SMASHES!", mod: 1.2 }]
+                actions: [{ type: "attack", text: "THE GOLEM SMASHES!", mod: 1.2 }],
+                drops: function() {grantEquipment();},
+                dropChance: 0.5
             },
             "VOID WRAITH": {
                 model: "wraith", color: 0x33ffff,
@@ -358,15 +366,25 @@
             // Render exploration HUD with the Inventory screen trigger
             UI.actions.style.display = "flex";
             UI.actions.innerHTML = `<button class="btn-pot" onclick="renderExplorationInventory()">🎒 INVENTORY</button>`;
-
+            
             currentLeftRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
+            while (currentLeftRoom.minDepth < depth) {currentLeftRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)]}
             currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
-            while(currentRightRoom === currentLeftRoom) currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
+            while(currentRightRoom === currentLeftRoom || currentRightRoom.minDepth < depth) currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
+            
+            for (const room of ROOM_POOL) {
+                console.log(room)
+                if (room.forceDepth === depth) {
+                    console.log("yaaaa")
+                    currentLeftRoom = room;
+                    currentRightRoom = room;
+                }
+            }
 
             const ll = document.getElementById('path-left'), lr = document.getElementById('path-right');
             ll.innerText = currentLeftRoom.name; lr.innerText = currentRightRoom.name;
-            ll.style.borderColor = `#${currentLeftRoom.color.toString(16)}`; ll.style.color = `#${currentLeftRoom.color.toString(16)}`;
-            lr.style.borderColor = `#${currentRightRoom.color.toString(16)}`; lr.style.color = `#${currentRightRoom.color.toString(16)}`;
+            ll.style.borderColor = `#${currentLeftRoom.color.toString(16).padStart(6, "0")}`; ll.style.color = `#${currentLeftRoom.color.toString(16).padStart(6, "0")}`;
+            lr.style.borderColor = `#${currentRightRoom.color.toString(16).padStart(6, "0")}`; lr.style.color = `#${currentRightRoom.color.toString(16).padStart(6, "0")}`;
             ll.style.display = 'block'; lr.style.display = 'block';
 
             leftChoice = new THREE.Mesh(geometries.room, new THREE.MeshStandardMaterial({color: currentLeftRoom.color, wireframe: true}));
@@ -527,10 +545,14 @@
         // ==========================================
         let pDefending = false;
 
-        function execMelee() {
+        function execMelee(parry = false) {
             const dmg = Math.floor(Math.random() * 4) + equipment.weapon.atk + (pLevel * 2);
             activeEnemy.hp -= dmg;
-            UI.prompt.innerText = `STRUCK WITH ${equipment.weapon.name} FOR -${dmg}`;
+            if (parry) {
+                UI.prompt.innerText = `PARRIED ATTACK FOR -${dmg}`;
+            } else {
+                UI.prompt.innerText = `STRUCK WITH ${equipment.weapon.name} FOR -${dmg}`;
+            }
             executeVisualHit(); advanceTurn();
         }
 
@@ -554,8 +576,8 @@
 
         function useItem(type) {
             if (type === 'hp' && inventory.hpPotions > 0) {
-                inventory.hpPotions--; pHP = Math.min(pMaxHP, pHP + 20);
-                UI.prompt.innerText = "DRANK HP POTION (+20 HP)";
+                inventory.hpPotions--; pHP = Math.min(pMaxHP, pHP + Math.ceil(pMaxHP/2));
+                UI.prompt.innerText = `DRANK HP POTION (+${Math.ceil(pMaxHP/2)} HP)`;
                 triggerFlash("rgba(85,255,85,0.2)");
                 updateHUD()
                 if (state == "BATTLE") { advanceTurn()} else {exitExplorationInventory(); renderExplorationInventory()};
@@ -584,9 +606,19 @@
                 if (ai.type === "attack") {
                     let rawDmg = Math.floor((Math.random() * 4 + activeEnemy.atk) * ai.mod);
                     let finalDmg = Math.max(1, rawDmg - equipment.armor.def);
-                    if (pDefending) finalDmg = Math.max(0, Math.floor(finalDmg / 2));
+                    if (pDefending) {
+                        if (Math.random() < 0.5) {
+                          finalDmg = Math.max(0, Math.floor(finalDmg / 2))
+                          UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${ai.text}</span><br>-${finalDmg} HP`;
+                        } else {
+                          finalDmg = 0;
+                          execMelee(true);
+                        }
+                    } else {
+                        UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${ai.text}</span><br>-${finalDmg} HP`;
+                    };
                     pHP -= finalDmg;
-                    UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${ai.text}</span><br>-${finalDmg} HP`;
+                    
                     triggerFlash("rgba(255,0,0,0.3)");
                 } else if (ai.type === "heal") {
                     activeEnemy.hp = Math.min(activeEnemy.max, activeEnemy.hp + ai.val);
@@ -615,10 +647,14 @@
                 pHP = pMaxHP; pMP = pMaxMP;
                 UI.prompt.innerHTML = `VICTORY! LEVEL UP!<br><span style='color:#33aaff'>REACHED LEVEL ${pLevel}</span>`;
                 triggerFlash("rgba(51,170,255,0.4)");
+                updateHUD(); setTimeout(buildChoiceEnvironment, 2000);
+            } else if (activeEnemy.blueprint.drops && activeEnemy.blueprint.dropChance && Math.random() < activeEnemy.blueprint.dropChance) {
+              clearSceneObjects();
+              activeEnemy.blueprint.drops();
             } else {
                 UI.prompt.innerHTML = `FOE DEFEATED<br><span style='color:#33aaff'>+${expGained} EXP</span>`;
+                updateHUD(); setTimeout(buildChoiceEnvironment, 2000);
             }
-            updateHUD(); setTimeout(buildChoiceEnvironment, 2000);
         }
 
         function executeGameOver() {
