@@ -228,7 +228,7 @@
                 model: "guardian", color: 0xff3333,
                 hp: (lvl) => 40 + (lvl * 2), atk: (lvl) => 6 + Math.floor(lvl * 0,5), expValue: 12,
                 actions: [{ type: "attack", text: "THE GUARDIAN OF GALAXIES SLAMS!", mod: 1.0 }],
-                drops: function() {inventory.armors.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  });},
+                drops: function() {knownSpells.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  });},
                 dropChance: 0.5
             }
         };
