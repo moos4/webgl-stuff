@@ -33,29 +33,9 @@ const ROOM_POOL = [
         action: function() {
             if (Math.random() < 0.6) battleEnemy("IRON GOLEM");
             else grantEquipment();
-        }
-    },
-    {
-        name: "Fae Glade Ruins", chance: 20, color: 0x33ff99,
-        action: function() {
-            if (Math.random() < 0.5) healPlayer(20, "YOU RESTED IN THE FAE GLADE");
-            else battleEnemy("PLAGUE STALKER");
-        }
-    },
-    {
-        name: "Cursed Burial Grounds", chance: 25, color: 0xff3333,
-        action: function() { battleEnemy("SABER WOLF"); }
-    },
-    {
-        name: "Strange Bazaar", chance: 20, color: 0xffaa00,
-        action: function() { openShop(); }
-    },
-    {
-        name: "Sunken Library", chance: 15, color: 0xe066ff,
-        action: function() {
-            if (Math.random() < 0.3) battleEnemy("VOID WRAITH");
-            else grantSpellScroll();
-        }
+        },
+        minDepth: 5
+        // forceDepth: 10
     }
 ];
 /*
@@ -67,11 +47,13 @@ openShop()
 grantSpellScroll()
 */
 const ENEMY_REGISTRY = {
-    "SABER WOLF": {
-        model: "wolf", color: 0xff3333,
-        hp: (lvl) => 15 + (lvl * 4), atk: (lvl) => 4 + Math.floor(lvl * 1.5), expValue: 6,
-        actions: [{ type: "attack", text: "THE WOLF BITES!", mod: 1.0 }]
-    }
+    "IRON GOLEM": {
+        model: "golem", color: 0xaa5533,
+        hp: (lvl) => 25 + (lvl * 5), atk: (lvl) => 6 + Math.floor(lvl * 1.5), expValue: 12,
+        actions: [{ type: "attack", text: "THE GOLEM SMASHES!", mod: 1.2 }],
+        drops: function() {grantEquipment();},
+        dropChance: 0.5
+    },
 };
 
 const geometries = {
@@ -79,6 +61,41 @@ const geometries = {
 };
 
 loadCustomGeometry("name", "assets/path");
+
+const GAMBLE_GAMES = [
+    {
+        name: "COIN FLIP",
+        action: function(input) {
+            var gain = input
+            var cum = Math.random()
+            console.log(cum);
+            if (cum <= 0.5) {
+                gain = Math.floor(gain*1.5)
+                UI.prompt.innerText = `HEADS, MADE ${gain}`
+                UI.actions.innerHTML = `
+                    <button id="goAgainBtn" class="btn-atk">GO AGAIN</button>
+                    <button id="cashOutBtn" class="btn-pot">CASH OUT (${gain})</button>
+                `
+                document.getElementById("goAgainBtn").addEventListener("click", () => {
+                    GAMBLE_GAMES[0].action(gain)
+                });
+                document.getElementById("cashOutBtn").addEventListener("click", () => {
+                    gold += gain;
+                    updateHUD();
+                    UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                });
+            } else {
+                gain = 0
+                UI.prompt.innerText = `TAILS, LOST EVERYTHING`
+                UI.actions.innerHTML = ``
+                updateHUD();
+                UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+            }
+        },
+        min: 2
+    }
+];
+
 ```
 2. then put that code in an issue (if you add new enemies and want new geometries, look [here.](https://threejs.org/docs/#BoxGeometry))
 3. I'll review it and might add it in
