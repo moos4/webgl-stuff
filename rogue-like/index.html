@@ -863,7 +863,7 @@
                 sellShop();
             } else {
                 const price = Math.floor(inventory.armors[index]["def"]*0.75);
-                inventory.armor.splice(index, 1);
+                inventory.armors.splice(index, 1);
                 gold += price;
                 updateHUD()
                 clearSceneObjects();
