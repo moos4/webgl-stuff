@@ -116,7 +116,7 @@
         };
 
         let equipment = {
-            weapon: { name: "RUSTY DAGGER", atk: 4 },
+            weapon: { name: "RUSTY DAGGER", atk: 2 },
             armor:  { name: "CLOTH TUNIC", def: 1 }
         };
 
@@ -162,8 +162,7 @@
                     if (Math.random() < 0.6) battleEnemy("IRON GOLEM");
                     else grantEquipment();
                 },
-                minDepth: 0,
-                forceDepth: 5
+                minDepth: 5
             },
             {
                 name: "Fae Glade Ruins", chance: 20, color: 0x33ff99,
@@ -185,11 +184,20 @@
                 action: function() {
                     if (Math.random() < 0.3) battleEnemy("VOID WRAITH");
                     else grantSpellScroll();
-                }
+                },
+                minDepth: 10,
             },
             {
-                name: "Tavern", chance: 69, color: 0x00fbff,
+                name: "Tavern", chance: 10, color: 0x00fbff,
                 action: function() { openTavern(); }
+            },
+            {
+                name: "Hidden Dealer", chance: 10, color: 0x00ffff,
+                action: function() {
+                    if (Math.random() < 0.4) battleEnemy("GUARDIAN OF GALAXIES");
+                    else openShop();
+                },
+                minDepth: 15
             }
         ];
 
@@ -215,9 +223,101 @@
                 model: "wolf", color: 0x75ff33,
                 hp: (lvl) => 16 + (lvl * 4), atk: (lvl) => 5 + Math.floor(lvl * 1.5), expValue: 9,
                 actions: [{ type: "attack", text: "TOXIC BITE!", mod: 1.1 }]
+            },
+            "GUARDIAN OF GALAXIES": {
+                model: "guardian", color: 0xff3333,
+                hp: (lvl) => 40 + (lvl * 2), atk: (lvl) => 6 + Math.floor(lvl * 0,5), expValue: 12,
+                actions: [{ type: "attack", text: "THE GUARDIAN OF GALAXIES SLAMS!", mod: 1.0 }],
+                drops: function() {inventory.armors.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  });},
+                dropChance: 0.5
             }
         };
-
+        
+        const GAMBLE_GAMES = [
+            {
+                name: "COIN FLIP",
+                action: function(input) {
+                    var gain = input
+                    var cum = Math.random()
+                    console.log(cum);
+                    if (cum <= 0.5) {
+                        gain = Math.floor(gain*1.5)
+                        UI.prompt.innerText = `HEADS, MADE ${gain}`
+                        UI.actions.innerHTML = `
+                            <button id="goAgainBtn" class="btn-atk">GO AGAIN</button>
+                            <button id="cashOutBtn" class="btn-pot">CASH OUT (${gain})</button>
+                        `
+                        document.getElementById("goAgainBtn").addEventListener("click", () => {
+                            GAMBLE_GAMES[0].action(gain)
+                        });
+                        document.getElementById("cashOutBtn").addEventListener("click", () => {
+                            gold += gain;
+                            updateHUD();
+                            UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                        });
+                    } else {
+                        gain = 0
+                        UI.prompt.innerText = `TAILS, LOST EVERYTHING`
+                        UI.actions.innerHTML = ``
+                        updateHUD();
+                        UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                    }
+                },
+                min: 2
+            },
+            {
+                name: "OVER UNDER",
+                action: function(input, num = Math.round(Math.random()*20)) {
+                    var gain = input;
+                    UI.actions.innerHTML = `
+                            <button id="overBtn" class="btn-atk">OVER</button>
+                            <button id="underBtn" class="btn-atk">UNDER</button>
+                            <button id="cashOutBtn" class="btn-pot">CASH OUT (${gain})</button>
+                        `
+                    UI.prompt.innerText = `OVER OR UNDER ${num}`
+                    document.getElementById("overBtn").addEventListener("click", () => {
+                        var newnum = Math.round(Math.random()*20)
+                        if (newnum > num) {
+                            UI.prompt.innerText = `${newnum}`
+                            gain += Math.floor(gain/4)
+                            setTimeout(GAMBLE_GAMES[1].action, 1000, gain, newnum)
+                        } else if (newnum == num) {
+                            UI.prompt.innerText = `SAME VALUE ${newnum}`
+                            setTimeout(GAMBLE_GAMES[1].action, 1000, gain, newnum)
+                        } else {
+                            UI.prompt.innerText = `LOST ${newnum} < ${num}`
+                            UI.actions.innerHTML = ``
+                            updateHUD();
+                            UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                        }
+                    });
+                    
+                    document.getElementById("underBtn").addEventListener("click", () => {
+                        var newnum = Math.round(Math.random()*20)
+                        if (newnum < num) {
+                            UI.prompt.innerText = `${newnum}`
+                            gain += Math.floor(gain/4)
+                            setTimeout(GAMBLE_GAMES[1].action, 1000, gain, newnum)
+                        } else if (newnum == num) {
+                            UI.prompt.innerText = `SAME VALUE ${newnum}`
+                            setTimeout(GAMBLE_GAMES[1].action, 1000, gain, newnum)
+                        } else {
+                            UI.prompt.innerText = `LOST ${newnum} > ${num}`
+                            UI.actions.innerHTML = ``
+                            updateHUD();
+                            UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                        }
+                    });
+                    
+                    document.getElementById("cashOutBtn").addEventListener("click", () => {
+                        gold += gain;
+                        updateHUD();
+                        UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                    });
+                }
+            }
+        ]
+        
         // ==========================================
         //  WEBGL GRAPHICS ENGINE
         // ==========================================
@@ -261,7 +361,8 @@
             wraith: new THREE.TorusKnotGeometry(1, 0.3, 64, 8),
             chest: new THREE.DodecahedronGeometry(1.3, 0),
             merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
-            scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12)
+            scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12),
+            guardian: new THREE.TorusKnotGeometry( 10, 3, 64, 8, 9, 3)
         };
         
 
@@ -358,6 +459,29 @@
         }
 
         function startGame() { buildChoiceEnvironment(); }
+        
+        function getWeightedRoom(depth, excludeRoom = null) {
+            const validRooms = ROOM_POOL.filter(room =>
+                (room.minDepth ?? 0) <= depth &&
+                room !== excludeRoom
+            );
+
+            const totalWeight = validRooms.reduce(
+                (sum, room) => sum + room.chance,
+                0
+            );
+
+            let roll = Math.random() * totalWeight;
+
+            for (const room of validRooms) {
+                roll -= room.chance;
+                if (roll <= 0) {
+                    return room;
+                }
+            }
+
+            return validRooms[validRooms.length - 1];
+        }
 
         function buildChoiceEnvironment() {
             state = "CHOOSE"; depth++; clearSceneObjects(); updateHUD();
@@ -366,16 +490,18 @@
             // Render exploration HUD with the Inventory screen trigger
             UI.actions.style.display = "flex";
             UI.actions.innerHTML = `<button class="btn-pot" onclick="renderExplorationInventory()">🎒 INVENTORY</button>`;
-            
+
+            /*
             currentLeftRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
             while (currentLeftRoom.minDepth < depth) {currentLeftRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)]}
             currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
             while(currentRightRoom === currentLeftRoom || currentRightRoom.minDepth < depth) currentRightRoom = ROOM_POOL[Math.floor(Math.random() * ROOM_POOL.length)];
+            */
+            currentLeftRoom = getWeightedRoom(depth);
+            currentRightRoom = getWeightedRoom(depth, currentLeftRoom);
             
             for (const room of ROOM_POOL) {
-                console.log(room)
                 if (room.forceDepth === depth) {
-                    console.log("yaaaa")
                     currentLeftRoom = room;
                     currentRightRoom = room;
                 }
@@ -548,12 +674,14 @@
         function execMelee(parry = false) {
             const dmg = Math.floor(Math.random() * 4) + equipment.weapon.atk + (pLevel * 2);
             activeEnemy.hp -= dmg;
+            executeVisualHit();
             if (parry) {
                 UI.prompt.innerText = `PARRIED ATTACK FOR -${dmg}`;
             } else {
                 UI.prompt.innerText = `STRUCK WITH ${equipment.weapon.name} FOR -${dmg}`;
+                advanceTurn();
             }
-            executeVisualHit(); advanceTurn();
+            
         }
 
         function execMagic(spellIndex) {
@@ -613,6 +741,7 @@
                         } else {
                           finalDmg = 0;
                           execMelee(true);
+                          if (activeEnemy.hp <= 0) { setTimeout(executeVictory, 800); return; }
                         }
                     } else {
                         UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${ai.text}</span><br>-${finalDmg} HP`;
@@ -701,7 +830,7 @@
               html += `<p style="font-size:0.8rem; color:#666; width:100%; text-align:center;">No stored armor</p>`;
           }
           inventory.armors.forEach((a, index) => {
-              html += `<button class="btn-def" onclick="equipItemFromBag('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
+              html += `<button class="btn-def" onclick="sellShopItem('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
           });
           html += `<button class="btn-back" onclick="clearSceneObjects(); openShop()">↩ BACK</button>`;
           UI.actions.innerHTML = html;
@@ -743,6 +872,67 @@
         }
         
         function exitShop() { UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000); }
+        
+        function openTavern() {
+            mainTarget = new THREE.Mesh(geometries.merchant, new THREE.MeshStandardMaterial({color: 0xffaa00, roughness: 0.4})); scene.add(mainTarget);
+            UI.prompt.innerText = "WELCOME TO THE TAVERN";
+            UI.actions.innerHTML = `
+                <button class="btn-pot" onclick="tavernRest()">💤 REST (15G)</button>
+                <button class="btn-atk" onclick="tavernGamble()">🎰 GAMBLE</button>
+            `
+        }
+        
+        function tavernRest() {
+            if (gold => 15) {
+                gold -= 15;
+                UI.actions.innerHTML = "";
+                const restType = Math.random()
+                if (restType < 0.25) {
+                    UI.prompt.innerText = "YOU HAD A SHORT REST"; triggerFlash("rgba(0,0,0,0.15)");
+                    pHP = Math.min(pMaxHP, pHP + pMaxHP/4);
+                    pMP = Math.min(pMaxMP, pMP + pMaxMP/4);
+                } else if (restType < 0.75) {
+                    UI.prompt.innerText = "YOU HAD A MEDIUM REST"; triggerFlash("rgba(0,0,0,0.15)");
+                    pHP = Math.min(pMaxHP, pHP + pMaxHP/2);
+                    pMP = Math.min(pMaxMP, pMP + pMaxMP/2);
+                } else {
+                    UI.prompt.innerText = "YOU HAD A LONG REST"; triggerFlash("rgba(0,0,0,0.15)");
+                    pHP = pMaxHP;
+                    pMP = pMaxMP;
+                }
+                updateHUD();
+                UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+            } else {UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");}
+        }
+        
+        function tavernGamble() {
+            const game = GAMBLE_GAMES[Math.floor(Math.random() * GAMBLE_GAMES.length)]
+            UI.prompt.innerText = game.name;
+            UI.actions.innerHTML = `
+                <label id="gambleLabel" >input: ${game.min}</label>
+                <input id="gambleInput"type="range" min="${game.min}" max="${gold}" value="${game.min}"></input>
+                <button id="startGamble">🪙 START</button>`
+            
+            const input = document.getElementById("gambleInput");
+            const label = document.getElementById("gambleLabel");
+
+            input.addEventListener("input", () => {
+                label.textContent = `input: ${input.value}`;
+            });
+
+            document.getElementById("startGamble").addEventListener("click", () => {
+                if (gold < input.value) {
+                    UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");
+                    updateHUD();
+                    UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
+                } else {
+                    game.action(Number(input.value));
+                    gold -= input.value
+                    updateHUD();
+                }
+            });
+        };
+        
 
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
