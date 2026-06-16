@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modular 3D WebGL Roguelike - BIG ASS UPDATE</title>
+    <title>Modular 3D WebGL Roguelike - little bugfix and rebalance</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Arial Black', Gadget, sans-serif; user-select: none; color: #fff; }
         #webgl-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
@@ -227,8 +227,8 @@
             "GUARDIAN OF GALAXIES": {
                 model: "guardian", color: 0xff3333,
                 hp: (lvl) => 40 + (lvl * 2), atk: (lvl) => 6 + Math.floor(lvl * 0,5), expValue: 12,
-                actions: [{ type: "attack", text: "THE GUARDIAN OF GALAXIES SLAMS!", mod: 1.0 }],
-                drops: function() {knownSpells.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  });},
+                actions: [{ type: "attack", text: "THE GUARDIAN OF GALAXIES SLAMS!", mod: 2.0 }],
+                drops: function() {inventory.armors.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  });},
                 dropChance: 0.5
             }
         };
@@ -240,7 +240,7 @@
                     var gain = input
                     var cum = Math.random()
                     console.log(cum);
-                    if (cum <= 0.5) {
+                    if (cum <= 0.25) {
                         gain = Math.floor(gain*1.5)
                         UI.prompt.innerText = `HEADS, MADE ${gain}`
                         UI.actions.innerHTML = `
@@ -267,7 +267,7 @@
             },
             {
                 name: "OVER UNDER",
-                action: function(input, num = Math.round(Math.random()*20)) {
+                action: function(input, num = Math.floor(Math.random()*9+2)) {
                     var gain = input;
                     UI.actions.innerHTML = `
                             <button id="overBtn" class="btn-atk">OVER</button>
@@ -276,7 +276,7 @@
                         `
                     UI.prompt.innerText = `OVER OR UNDER ${num}`
                     document.getElementById("overBtn").addEventListener("click", () => {
-                        var newnum = Math.round(Math.random()*20)
+                        var newnum = Math.floor(Math.random()*9+2)
                         if (newnum > num) {
                             UI.prompt.innerText = `${newnum}`
                             gain += Math.floor(gain/4)
@@ -293,7 +293,7 @@
                     });
                     
                     document.getElementById("underBtn").addEventListener("click", () => {
-                        var newnum = Math.round(Math.random()*20)
+                        var newnum = Math.floor(Math.random()*9+2)
                         if (newnum < num) {
                             UI.prompt.innerText = `${newnum}`
                             gain += Math.floor(gain/4)
@@ -314,7 +314,8 @@
                         updateHUD();
                         UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
                     });
-                }
+                },
+                min: 10
             }
         ]
         
@@ -362,7 +363,7 @@
             chest: new THREE.DodecahedronGeometry(1.3, 0),
             merchant: new THREE.ConeGeometry(1.3, 2.5, 5),
             scroll: new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12),
-            guardian: new THREE.TorusKnotGeometry( 10, 3, 64, 8, 9, 3)
+            guardian: new THREE.TorusKnotGeometry( 2.5, 0.75, 64, 8, 9, 3)
         };
         
 
@@ -847,6 +848,12 @@
                     inventory.weapons.push({ name: `MASTERWORK ${wepBlueprint.name}`, atk: power });
                     UI.prompt.innerText = `BOUGHT MASTERWORK ${wepBlueprint.name}! (Sent to bag)`;
                 }
+                if (item === 'arm') {
+                    const armBlueprint = EQUIPMENT_REGISTRY.armors[Math.floor(Math.random() * EQUIPMENT_REGISTRY.armors.length)];
+                    const power = armBlueprint.baseDef + Math.floor(depth * 1.8) + 2;
+                    inventory.armors.push({ name: `MASTERWORK ${armBlueprint.name}`, def: power });
+                    UI.prompt.innerText = `BOUGHT MASTERWORK ${armBlueprint.name}! (Sent to bag)`;
+                }
                 triggerFlash("rgba(255,215,0,0.15)"); updateHUD();
             } else {
                 UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");
@@ -862,8 +869,8 @@
                 clearSceneObjects();
                 sellShop();
             } else {
-                const price = Math.floor(inventory.armors[index]["def"]*0.75);
-                inventory.armors.splice(index, 1);
+                const price = Math.floor(inventory.armor[index]["def"]*0.75);
+                inventory.armor.splice(index, 1);
                 gold += price;
                 updateHUD()
                 clearSceneObjects();
@@ -872,6 +879,22 @@
         }
         
         function exitShop() { UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000); }
+        
+        
+        // shop 2
+        
+        function openDealer() {
+            state = "SHOP"; UI.prompt.innerText = "HIDDEN DEALER: 'WANT SOMETHING?'"; UI.prompt.style.color = "#ffd700";
+            mainTarget = new THREE.Mesh(geometries.merchant, new THREE.MeshStandardMaterial({color: 0xff0000, roughness: 0.4})); scene.add(mainTarget);
+
+            UI.actions.style.display = "flex";
+            UI.actions.innerHTML = `
+              <button class="btn-atk" onclick="buyShopItem('arm', 40)">🛡 ARMOR (40G)</button>
+              <button class="btn-back" onclick="exitShop()">🚪 LEAVE</button>
+            `;
+        }
+        
+        // tavern
         
         function openTavern() {
             mainTarget = new THREE.Mesh(geometries.merchant, new THREE.MeshStandardMaterial({color: 0xffaa00, roughness: 0.4})); scene.add(mainTarget);
