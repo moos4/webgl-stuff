@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modular 3D WebGL Roguelike - more bugfix</title>
+    <title>Modular 3D WebGL Roguelike - sounds and a lot more</title>
     <style>
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Arial Black', Gadget, sans-serif; user-select: none; color: #fff; }
         #webgl-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
@@ -57,8 +57,99 @@
         .btn-pot { border-color: #55ff55; color: #55ff55; }
         .btn-spl { border-color: #aa55ff; color: #aa55ff; }
         .btn-back { border-color: #ffaa00; color: #ffaa00; }
+        button:disabled { background: #555; border-color: #fff; }
 
         #flash-overlay { position: absolute; top:0; left:0; width:100vw; height:100vh; z-index: 5; pointer-events: none; background: rgba(255,0,0,0); transition: background 0.1s;}
+        #settings-box {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 4;
+        
+            width: 280px;
+            padding: 16px 18px;
+        
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #444;
+            border-radius: 8px;
+        
+            color: #fff;
+            font-size: 0.9rem;
+            pointer-events: auto;
+        
+            box-shadow:
+                0 0 15px rgba(0, 0, 0, 0.8),
+                inset 0 0 10px rgba(255, 255, 255, 0.03);
+        
+            backdrop-filter: blur(6px);
+        }
+        
+        #settings-box h3 {
+            margin: 0 0 12px;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #ccc;
+            border-bottom: 1px solid #444;
+            padding-bottom: 8px;
+        }
+        
+        #settings-box .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            gap: 12px;
+        }
+        
+        #settings-box label {
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+        
+        #settings-box input[type="range"] {
+            width: 120px;
+            accent-color: #4488ff;
+        }
+        
+        #settings-box select,
+        #settings-box input[type="checkbox"] {
+            cursor: pointer;
+        }
+        
+        #settings-box .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1rem;
+            cursor: pointer;
+            min-width: auto;
+            padding: 0;
+            box-shadow: none;
+        }
+        
+        #settings-box .close-btn:hover {
+            color: #fff;
+        }
+        #settings-box.minimized #settings-content {
+            display: none;
+        }
+        
+        #settings-box.minimized {
+            max-width: 36px;
+            padding: 0px;
+        }
+        
+        #settings-toggle {
+            min-width: auto;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            margin-bottom: 10px;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
@@ -98,8 +189,38 @@
         <div id="center-prompt">CLICK TO START</div>
 
         <div id="combat-actions"></div>
+        
+        <div id="settings-box">
+            <button id="settings-toggle">⚙</button>
+        
+            <div id="settings-content" class="minimized">
+                <h3>Settings</h3>
+                <div class="setting-row">
+                    <label>MUSIC</label>
+                    <input id="settings-music" type="range" min="0" max="1" value="0.75" step="0.01">
+                </div>
+                <div class="setting-row">
+                    <label>SOUND EFFECTS</label>
+                    <input id="settings-sound" type="range" min="0" max="1" value="0.75" step="0.01">
+                </div>
+            </div>
+        </div>
     </div>
     <script>
+        // ==========================================
+        //  SETTINGS
+        // ==========================================
+        const settingsBox = document.getElementById('settings-box');
+        const settingsToggle = document.getElementById('settings-toggle');
+        const settingsMusic = document.getElementById('settings-music');
+        const settingsSound = document.getElementById('settings-sound');
+        
+        settingsToggle.addEventListener('click', () => {
+            settingsBox.classList.toggle('minimized');
+        });
+        
+        settingsMusic.addEventListener("input", updateMusicVolume);
+        
         // ==========================================
         //  GLOBAL STATE & INVENTORY
         // ==========================================
@@ -192,7 +313,7 @@
                 action: function() { openTavern(); }
             },
             {
-                name: "Hidden Dealer", chance: 10, color: 0x00ffff,
+                name: "Hidden Dealer", chance: 10, color: 0xFF5F53,
                 action: function() {
                     if (Math.random() < 0.4) battleEnemy("GUARDIAN OF GALAXIES");
                     else openDealer();
@@ -217,7 +338,7 @@
             "VOID WRAITH": {
                 model: "wraith", color: 0x33ffff,
                 hp: (lvl) => 18 + (lvl * 3), atk: (lvl) => 5 + Math.floor(lvl * 1.5), expValue: 10,
-                actions: [{ type: "attack", text: "THE WRAITH SIPHONS!", mod: 1.0 }, { type: "heal", text: "WRAITH REGENERATES!", val: 8 }]
+                actions: [{ type: "attack", text: "THE WRAITH SIPHONS!", mod: 1.5 }, { type: "heal", text: "WRAITH REGENERATES!", val: 8 }]
             },
             "PLAGUE STALKER": {
                 model: "wolf", color: 0x75ff33,
@@ -226,9 +347,9 @@
             },
             "GUARDIAN OF GALAXIES": {
                 model: "guardian", color: 0xff3333,
-                hp: (lvl) => 40 + (lvl * 2), atk: (lvl) => 6 + Math.floor(lvl * 0,5), expValue: 12,
+                hp: (lvl) => 40 + (lvl * 2), atk: (lvl) => 16 + Math.floor(lvl * 2,0), expValue: 12,
                 actions: [{ type: "attack", text: "THE GUARDIAN OF GALAXIES SLAMS!", mod: 2.0 }],
-                drops: function() {knownSpells.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  });},
+                drops: function() {knownSpells.push({ id: "galaxy", name: "GALAXY STRIKE", cost: 20, baseDmg: 70, heals: -15, color: "rgba(0,0,0,0.0)"  }); buildChoiceEnvironment()},
                 dropChance: 0.5
             }
         };
@@ -239,7 +360,6 @@
                 action: function(input) {
                     var gain = input
                     var cum = Math.random()
-                    console.log(cum);
                     if (cum <= 0.25) {
                         gain = Math.floor(gain*1.5)
                         UI.prompt.innerText = `HEADS, MADE ${gain}`
@@ -251,6 +371,7 @@
                             GAMBLE_GAMES[0].action(gain)
                         });
                         document.getElementById("cashOutBtn").addEventListener("click", () => {
+                            playSound("gold");
                             gold += gain;
                             updateHUD();
                             UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
@@ -310,6 +431,7 @@
                     });
                     
                     document.getElementById("cashOutBtn").addEventListener("click", () => {
+                        playSound("gold");
                         gold += gain;
                         updateHUD();
                         UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
@@ -366,6 +488,20 @@
             guardian: new THREE.TorusKnotGeometry( 2.5, 0.75, 64, 8, 9, 3)
         };
         
+        const sounds = {
+            select: new Audio("assets/audio/blipSelect.wav"),
+            kill: new Audio("assets/audio/explosion.wav"),
+            hurt: new Audio("assets/audio/hitHurt.wav"),
+            potion: new Audio("assets/audio/potion.wav"),
+            gold: new Audio("assets/audio/gold.wav"),
+            notEnough: new Audio("assets/audio/notEnough.wav"),
+        }
+        
+        const songs = {
+            era: new Audio("assets/audio/music/djartmusic-the-return-of-the-8-bit-era.mp3"),
+            beat: new Audio("assets/audio/music/nocopyrightsound633-arcade-beat.mp3"),
+        }
+        
 
         let activeEntities = [];
         const raycaster = new THREE.Raycaster();
@@ -406,7 +542,62 @@
             document.getElementById('path-left').style.display = 'none';
             document.getElementById('path-right').style.display = 'none';
         }
+        
+        function playSound(soundString) {
+            sounds[soundString].volume = settingsSound.value;
+            sounds[soundString].play()
+        }
+        
+        let currentSong = null;
+        let fadeInterval = null;
+        
+        function updateMusicVolume() {
+            Object.values(songs).forEach(song => {
+                const fade = song.fadeVolume ?? 1;
+                song.volume = fade * settingsMusic.value;
+            });
+        }
 
+        function playSong(songName, fadeDuration = 1000) {
+            const nextSong = songs[songName];
+            if (!nextSong) return;
+            nextSong.loop = true;
+            if (!currentSong || currentSong.paused) {
+                nextSong.fadeVolume = 1;
+                nextSong.volume = settingsMusic.value;
+                nextSong.play();
+        
+                currentSong = nextSong;
+                return;
+            }
+            clearInterval(fadeInterval);
+            const oldSong = currentSong;
+            const stepTime = 50;
+            const volumeStep = 1 / (fadeDuration / stepTime);
+        
+            fadeInterval = setInterval(() => {
+                oldSong.fadeVolume = Math.max(
+                    0,
+                    (oldSong.fadeVolume ?? 1) - volumeStep
+                );
+                oldSong.volume = oldSong.fadeVolume * settingsMusic.value;
+        
+                if (oldSong.fadeVolume <= 0) {
+                    clearInterval(fadeInterval);
+        
+                    oldSong.pause();
+                    oldSong.currentTime = 0;
+                    oldSong.fadeVolume = 1;
+        
+                    nextSong.fadeVolume = 1;
+                    nextSong.volume = settingsMusic.value;
+                    nextSong.play();
+                    currentSong = nextSong;
+                }
+            }, stepTime);
+        }
+
+        var potUsed = true
         // ==========================================
         //  UI & HUD LOGIC
         // ==========================================
@@ -457,9 +648,10 @@
             inventory = { hpPotions: 2, mpPotions: 1, weapons: [], armors: [] };
             equipment = { weapon: { name: "RUSTY DAGGER", atk: 2 }, armor: { name: "CLOTH TUNIC", def: 1 } };
             knownSpells = [ { id: "zap", name: "⚡ SPARK", cost: 3, baseDmg: 8, color: "rgba(255,255,0,0.4)" } ];
+            potUsed = true;
         }
 
-        function startGame() { buildChoiceEnvironment(); }
+        function startGame() { buildChoiceEnvironment(); playSong("era")}
         
         function getWeightedRoom(depth, excludeRoom = null) {
             const validRooms = ROOM_POOL.filter(room =>
@@ -485,6 +677,7 @@
         }
 
         function buildChoiceEnvironment() {
+            potUsed = false
             state = "CHOOSE"; depth++; clearSceneObjects(); updateHUD();
             UI.prompt.innerText = "CHOOSE YOUR PATH"; UI.prompt.style.color = "#ffffff";
             
@@ -522,13 +715,14 @@
         }
 
         function executePathSelection(room) {
-            state = "EVENT"; clearSceneObjects(); room.action();
+            state = "EVENT"; clearSceneObjects(); playSound("select"); room.action();
         }
 
         // ==========================================
         //  EXPLORATION INVENTORY INTERFACE
         // ==========================================
         function renderExplorationInventory() {
+            playSound("select");
             state = "INVENTORY_MENU"; // Temporarily locks out-of-combat room raycasting
             document.getElementById('path-left').style.display = 'none';
             document.getElementById('path-right').style.display = 'none';
@@ -550,14 +744,16 @@
             inventory.armors.forEach((a, index) => {
                 html += `<button class="btn-def" onclick="equipItemFromBag('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
             });
+            
             html += `<div style="width:100%; text-align:center; color:#0800ff; font-size:0.9rem; margin-bottom:5px;">--- ITEMS BAG ---</div>`;
-            html += `<button class="btn-pot" onclick="useItem('hp')">❤️ HP POTION (${inventory.hpPotions})</button>`;
-            html += `<button class="btn-spl" onclick="useItem('mp')">🧪 MP POTION (${inventory.mpPotions})</button>`;
+            html += `<button class="btn-pot" onclick="useItem('hp'); potUsed = true; renderExplorationInventory();" ${potUsed ? 'disabled' : ''}>❤️ HP POTION (${inventory.hpPotions})</button>`;
+            html += `<button class="btn-spl" onclick="useItem('mp'); potUsed = true; renderExplorationInventory();" ${potUsed ? 'disabled' : ''}>🧪 MP POTION (${inventory.mpPotions})</button>`;
             html += `<div style="width:100%; margin-top:20px; text-align:center;"><button class="btn-back" onclick="exitExplorationInventory()">↩ CLOSE</button></div>`;
             UI.actions.innerHTML = html;
         }
 
         function equipItemFromBag(type, index) {
+            playSound("select");
             if (type === 'weapon') {
                 const standardOldWeapon = equipment.weapon;
                 equipment.weapon = inventory.weapons[index];
@@ -574,6 +770,7 @@
         }
 
         function exitExplorationInventory() {
+            playSound("select");
             state = "CHOOSE";
             UI.prompt.innerText = "CHOOSE YOUR PATH";
             document.getElementById('path-left').style.display = 'block';
@@ -654,16 +851,18 @@
         }
 
         function renderMagicMenu() {
+            playSound("select");
             UI.actions.innerHTML = knownSpells.map((s, i) =>
                 `<button class="btn-spl" onclick="execMagic(${i})">${s.name} (${s.cost} MP)</button>`
-            ).join('') + `<button class="btn-back" onclick="renderMainMenu()">↩ BACK</button>`;
+            ).join('') + `<button class="btn-back" onclick="renderMainMenu(); playSound('select')">↩ BACK</button>`;
         }
 
         function renderItemMenu() {
+            playSound("select");
             UI.actions.innerHTML = `
                 <button class="btn-pot" onclick="useItem('hp')">❤️ HP POTION (${inventory.hpPotions})</button>
                 <button class="btn-spl" onclick="useItem('mp')">🧪 MP POTION (${inventory.mpPotions})</button>
-                <button class="btn-back" onclick="renderMainMenu()">↩ BACK</button>
+                <button class="btn-back" onclick="renderMainMenu(); playSound('select')">↩ BACK</button>
             `;
         }
 
@@ -690,13 +889,13 @@
             if (pMP < spell.cost) { UI.prompt.innerText = "NOT ENOUGH MP!"; return; }
             
             pMP -= spell.cost;
-            const dmg = spell.baseDmg + (pLevel * 3);
+            const dmg = spell.baseDmg + (pLevel * 5);
             activeEnemy.hp -= dmg;
             
             let txt = `CAST ${spell.name} FOR -${dmg}!`;
             if (spell.heals) {
                 pHP = Math.min(pMaxHP, pHP + spell.heals + (pLevel * 2));
-                txt += `\nHEALED +${spell.heals} HP!`;
+                txt += `\nHEALED +${spell.heals + (pLevel * 2)} HP!`;
             }
             
             UI.prompt.innerText = txt;
@@ -705,12 +904,14 @@
 
         function useItem(type) {
             if (type === 'hp' && inventory.hpPotions > 0) {
-                inventory.hpPotions--; pHP = Math.min(pMaxHP, pHP + Math.ceil(pMaxHP/2));
-                UI.prompt.innerText = `DRANK HP POTION (+${Math.ceil(pMaxHP/2)} HP)`;
+                playSound("potion");
+                inventory.hpPotions--; pHP = Math.min(pMaxHP, pHP + Math.ceil(pMaxHP/4));
+                UI.prompt.innerText = `DRANK HP POTION (+${Math.ceil(pMaxHP/4)} HP)`;
                 triggerFlash("rgba(85,255,85,0.2)");
                 updateHUD()
                 if (state == "BATTLE") { advanceTurn()} else {exitExplorationInventory(); renderExplorationInventory()};
             } else if (type === 'mp' && inventory.mpPotions > 0) {
+                playSound("potion");
                 inventory.mpPotions--; pMP = Math.min(pMaxMP, pMP + 15);
                 UI.prompt.innerText = "DRANK MP POTION (+15 MP)";
                 triggerFlash("rgba(68,136,255,0.2)");
@@ -722,19 +923,20 @@
         }
 
         function execDefend() {
+            playSound("select");
             pDefending = true; UI.prompt.innerText = "GUARD RAISED (DMG REDUCED)"; advanceTurn();
         }
 
         function advanceTurn() {
             updateHUD(); renderMainMenu(); UI.actions.style.pointerEvents = "none";
-            if (activeEnemy.hp <= 0) { setTimeout(executeVictory, 800); return; }
+            if (activeEnemy.hp <= 0) { setTimeout(executeVictory, 800); playSound("kill"); return; }
 
             setTimeout(() => {
                 if(state !== "BATTLE") return;
                 const ai = activeEnemy.blueprint.actions[Math.floor(Math.random() * activeEnemy.blueprint.actions.length)];
                 if (ai.type === "attack") {
                     let rawDmg = Math.floor((Math.random() * 4 + activeEnemy.atk) * ai.mod);
-                    let finalDmg = Math.max(1, rawDmg - equipment.armor.def);
+                    let finalDmg = Math.max(activeEnemy.atk, rawDmg - equipment.armor.def);
                     if (pDefending) {
                         if (Math.random() < 0.5) {
                           finalDmg = Math.max(0, Math.floor(finalDmg / 2))
@@ -742,7 +944,7 @@
                         } else {
                           finalDmg = 0;
                           execMelee(true);
-                          if (activeEnemy.hp <= 0) { setTimeout(executeVictory, 800); return; }
+                          if (activeEnemy.hp <= 0) { setTimeout(executeVictory, 800); playSound("kill"); return; }
                         }
                     } else {
                         UI.prompt.innerHTML = `<span style='font-size:1.2rem; color:#ffaaaa'>${ai.text}</span><br>-${finalDmg} HP`;
@@ -761,6 +963,7 @@
         }
 
         function executeVisualHit() {
+            playSound("hurt");
             shakeTimer = 15; mainTarget.material.color.setHex(0xffffff);
             setTimeout(() => { if(mainTarget && activeEnemy.hp > 0) mainTarget.material.color.setHex(activeEnemy.blueprint.color); }, 100);
         }
@@ -768,6 +971,7 @@
         function executeVictory() {
             state = "EVENT"; UI.actions.style.display = "none"; UI.actions.style.pointerEvents = "auto";
             if(mainTarget) mainTarget.material.wireframe = true;
+            
             
             const expGained = activeEnemy.blueprint.expValue;
             pExp += expGained; gold += 10 + depth * 2;
@@ -809,15 +1013,19 @@
         }
         
         function buyShop() {
+            playSound("select");
             UI.prompt.innerText = "MERCHANT: 'WHAT DO YOU WANT TO BUY?'";
+            potCost = Math.ciel(depth/5)*15
+            wepCost = Math.ciel(depth/10)*40
             UI.actions.innerHTML = `
-                <button class="btn-pot" onclick="buyShopItem('hp', 15)">❤️ HP POT (15G)</button>
-                <button class="btn-spl" onclick="buyShopItem('mp', 15)">🧪 MP POT (15G)</button>
-                <button class="btn-atk" onclick="buyShopItem('wep', 40)">⚔️ WEAPON (40G)</button>
-                <button class="btn-back" onclick="clearSceneObjects(); openShop()">↩ BACK</button>
+                <button class="btn-pot" onclick="buyShopItem('hp', ${potCost})">❤️ HP POT (${potCost}G)</button>
+                <button class="btn-spl" onclick="buyShopItem('mp', ${potCost})">🧪 MP POT (${potCost}G)</button>
+                <button class="btn-atk" onclick="buyShopItem('wep', ${wepCost})">⚔️ WEAPON (${wepCost}G)</button>
+                <button class="btn-back" onclick="clearSceneObjects(); openShop(); playSound('select');">↩ BACK</button>
             `;
         }
         function sellShop() {
+          playSound("select");
           UI.prompt.innerText = "MERCHANT: 'WHAT DO YOU WANT TO SELL?'";
           let html = `<div style="width:100%; text-align:center; color:#ff5555; font-size:0.9rem; margin-bottom:5px;">--- WEAPONS BAG ---</div>`;
           if (inventory.weapons.length === 0) {
@@ -833,14 +1041,15 @@
           inventory.armors.forEach((a, index) => {
               html += `<button class="btn-def" onclick="sellShopItem('armor', ${index})">${a.name} (+${a.def} DEF)</button>`;
           });
-          html += `<button class="btn-back" onclick="clearSceneObjects(); openShop()">↩ BACK</button>`;
+          html += `<button class="btn-back" onclick="clearSceneObjects(); openShop(); playSound('select');">↩ BACK</button>`;
           UI.actions.innerHTML = html;
         }
 
         function buyShopItem(item, cost) {
             if (gold >= cost) {
+                playSound("gold");
                 gold -= cost;
-                if (item === 'hp') { inventory.hpPotions++; UI.prompt.innerText = "BOUGHT HP POTION!"; }
+                if (item === 'hp') { if (inventory.hpPotions < 5 ) {inventory.hpPotions++; UI.prompt.innerText = "BOUGHT HP POTION!";} else {gold+= cost; UI.prompt.innerText = "NOT ENOUGH SPACE!"; playSound("notEnough");} }
                 if (item === 'mp') { inventory.mpPotions++; UI.prompt.innerText = "BOUGHT MP POTION!"; }
                 if (item === 'wep') {
                     const wepBlueprint = EQUIPMENT_REGISTRY.weapons[Math.floor(Math.random() * EQUIPMENT_REGISTRY.weapons.length)];
@@ -856,11 +1065,13 @@
                 }
                 triggerFlash("rgba(255,215,0,0.15)"); updateHUD();
             } else {
+                playSound("notEnough");
                 UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");
             }
         }
         
         function sellShopItem(type, index) {
+            playSound("gold");
             if (type === 'weapon') {
                 const price = Math.floor(inventory.weapons[index]["atk"]*0.75);
                 inventory.weapons.splice(index, 1);
@@ -925,7 +1136,7 @@
                 }
                 updateHUD();
                 UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
-            } else {UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");}
+            } else {UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)"); playSound("notEnough");}
         }
         
         function tavernGamble() {
@@ -945,7 +1156,7 @@
 
             document.getElementById("startGamble").addEventListener("click", () => {
                 if (gold < input.value) {
-                    UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)");
+                    UI.prompt.innerText = "NOT ENOUGH GOLD!"; triggerFlash("rgba(255,0,0,0.15)"); playSound("notEnough");
                     updateHUD();
                     UI.actions.style.display = "none"; setTimeout(buildChoiceEnvironment, 1000);
                 } else {
